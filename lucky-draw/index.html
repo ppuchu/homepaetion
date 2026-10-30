@@ -57,7 +57,6 @@
   .count b { color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; cursor: pointer; }
   .check input { width: 18px; height: 18px; accent-color: var(--accent); }
-  .sub-label { font-size: 14px; color: var(--muted); margin: 16px 0 8px; }
   .btn {
     display: block; width: 100%; padding: 18px; border: none; border-radius: 14px;
     background: var(--accent); color: #fff; font-size: 20px; font-weight: 800; cursor: pointer;
@@ -67,13 +66,7 @@
   .btn:active { transform: scale(0.98); }
   .btn:disabled { background: #d9c9ba; cursor: not-allowed; }
   .btn.ghost { background: #fff; color: var(--muted); border: 1px solid var(--line); font-size: 14px; padding: 10px; font-weight: 500; }
-  .stage {
-    text-align: center; padding: 30px 10px; border-radius: 16px;
-    background: linear-gradient(135deg, #fff1e6, #fff9e8);
-    margin-bottom: 16px; min-height: 130px; display: flex; align-items: center; justify-content: center;
-  }
-  .rolling { font-size: 64px; font-weight: 900; letter-spacing: 2px; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .stage .placeholder { color: var(--muted); }
+  .placeholder { text-align: center; color: var(--muted); padding: 10px 0 16px; }
   .winners { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 16px; }
   .winner {
     background: var(--gold); color: var(--ink); border-radius: 14px; padding: 12px 18px;
@@ -89,7 +82,7 @@
   .hidden { display: none !important; }
   canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 
-  /* 구슬 경주 화면 */
+  /* 서바이벌 미로 화면 */
   .race { position: fixed; inset: 0; background: #000; z-index: 20; }
   .race canvas { width: 100%; height: 100%; display: block; }
   .race-bar {
@@ -119,8 +112,8 @@
 <canvas id="confetti"></canvas>
 <div class="wrap">
   <header>
-    <h1>🎁 리뷰 이벤트 랜덤 추첨기</h1>
-    <p>참여 번호를 입력하고 버튼만 누르면 공정하게 추첨해요</p>
+    <h1>🎁 리뷰 이벤트 서바이벌 추첨</h1>
+    <p>번호가 적힌 공들이 미로를 내려가요. 구멍에 빠지면 탈락, 끝까지 살아남은 공이 당첨!</p>
   </header>
 
   <section class="card">
@@ -139,9 +132,9 @@
     <div id="mode-range" class="hidden">
       <div class="row">
         <div class="field"><label>시작 번호</label><input type="number" id="rangeStart" value="1" min="0"></div>
-        <div class="field"><label>끝 번호</label><input type="number" id="rangeEnd" value="100" min="0"></div>
+        <div class="field"><label>끝 번호</label><input type="number" id="rangeEnd" value="30" min="0"></div>
       </div>
-      <div class="hint">예) 쿠폰 1번 ~ 100번 중에서 추첨</div>
+      <div class="hint">예) 쿠폰 1번 ~ 30번 중에서 추첨</div>
     </div>
 
     <div class="count">참여 인원: <b id="total">0</b>명</div>
@@ -150,29 +143,15 @@
   <section class="card">
     <h2>2. 추첨 설정</h2>
     <div class="row">
-      <div class="field"><label>당첨 인원</label><input type="number" id="winnerCount" value="1" min="1"></div>
+      <div class="field"><label>당첨 인원 (끝까지 살아남을 공 개수)</label><input type="number" id="winnerCount" value="1" min="1"></div>
     </div>
-
-    <div class="sub-label">추첨 방식</div>
-    <div class="tabs" id="methodTabs">
-      <button class="tab active" data-method="race">🏁 구슬 경주</button>
-      <button class="tab" data-method="quick">⚡ 빠른 추첨</button>
-    </div>
-    <div id="raceOptions">
-      <div class="tabs" id="ruleTabs" style="margin-bottom: 0;">
-        <button class="tab active" data-rule="first">먼저 도착한 구슬 당첨</button>
-        <button class="tab" data-rule="last">끝까지 남은 구슬 당첨</button>
-      </div>
-      <div class="hint">번호가 적힌 구슬들이 장애물 코스를 굴러 내려가며 경주해요. 손님들과 같이 보기 좋아요!</div>
-    </div>
-
     <label class="check"><input type="checkbox" id="excludePrev" checked> 이전에 당첨된 번호는 제외하기</label>
   </section>
 
   <section class="card">
-    <div class="stage" id="stage"><span class="placeholder">추첨 버튼을 눌러주세요</span></div>
+    <div class="placeholder" id="resultLabel">시작 버튼을 누르면 서바이벌이 시작돼요</div>
     <div class="winners" id="winners"></div>
-    <button class="btn" id="drawBtn">🎉 추첨하기</button>
+    <button class="btn" id="drawBtn">🔥 서바이벌 시작</button>
     <div class="error" id="error"></div>
   </section>
 
@@ -194,7 +173,7 @@
   </div>
   <div class="race-result hidden" id="raceResult">
     <div class="box">
-      <h3>🏆 당첨을 축하해요!</h3>
+      <h3>🏆 최후의 생존자!</h3>
       <p id="raceResultInfo"></p>
       <div class="winners" id="raceWinners"></div>
       <button class="btn" id="raceOk">확인</button>
@@ -211,8 +190,6 @@
   const $ = (id) => document.getElementById(id);
   const STORE_KEY = 'luckyDraw.v1';
   let mode = 'list';
-  let method = 'race';
-  let rule = 'first';
   let history = [];
 
   // 공정한 추첨을 위해 Math.random 대신 브라우저 암호학적 난수 사용
@@ -258,7 +235,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        mode, method, rule,
+        mode,
         numbers: $('numbers').value,
         rangeStart: $('rangeStart').value,
         rangeEnd: $('rangeEnd').value,
@@ -276,14 +253,12 @@
       if (!d) return;
       $('numbers').value = d.numbers ?? '';
       $('rangeStart').value = d.rangeStart ?? 1;
-      $('rangeEnd').value = d.rangeEnd ?? 100;
+      $('rangeEnd').value = d.rangeEnd ?? 30;
       $('winnerCount').value = d.winnerCount ?? 1;
       $('dedupe').checked = d.dedupe ?? true;
       $('excludePrev').checked = d.excludePrev ?? true;
       history = d.history ?? [];
       setMode(d.mode ?? 'list');
-      setMethod(d.method ?? 'race');
-      setRule(d.rule ?? 'first');
     } catch (_) {}
   }
 
@@ -293,19 +268,6 @@
     $('mode-list').classList.toggle('hidden', m !== 'list');
     $('mode-range').classList.toggle('hidden', m !== 'range');
     updateCount();
-  }
-
-  function setMethod(m) {
-    method = m;
-    document.querySelectorAll('#methodTabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.method === m));
-    $('raceOptions').classList.toggle('hidden', m !== 'race');
-    save();
-  }
-
-  function setRule(r) {
-    rule = r;
-    document.querySelectorAll('#ruleTabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.rule === r));
-    save();
   }
 
   function renderHistory() {
@@ -319,8 +281,7 @@
       const li = document.createElement('li');
       const time = document.createElement('time');
       time.textContent = h.time;
-      const how = h.method === 'race' ? (h.rule === 'last' ? ' (구슬 경주·꼴찌)' : ' (구슬 경주)') : '';
-      li.append(time, `${h.total}명 중${how} → 🏆 ${h.winners.join(', ')}`);
+      li.append(time, `${h.total}명 중 → 🏆 ${h.winners.join(', ')}`);
       ul.appendChild(li);
     });
   }
@@ -331,39 +292,6 @@
     chip.innerHTML = `<small>${i + 1}번째 당첨</small>`;
     chip.append(label);
     return chip;
-  }
-
-  function record(total, winners) {
-    history.push({ time: new Date().toLocaleString('ko-KR'), total, winners, method, rule });
-    renderHistory();
-    save();
-  }
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  async function rollTo(pool, finalValue) {
-    const stage = $('stage');
-    stage.innerHTML = '<span class="rolling"></span>';
-    const el = stage.firstChild;
-    // 처음엔 빠르게, 점점 느려지는 슬롯머신 연출
-    for (let i = 0; i < 22; i++) {
-      el.textContent = pool[randomInt(pool.length)];
-      await sleep(30 + i * i * 0.5);
-    }
-    el.textContent = finalValue;
-  }
-
-  async function quickDraw(pool, count) {
-    // 피셔-예이츠 방식으로 중복 없이 뽑기
-    const winners = shuffle(pool).slice(0, count);
-    $('winners').innerHTML = '';
-    for (let i = 0; i < winners.length; i++) {
-      await rollTo(pool, winners[i]);
-      $('winners').appendChild(winnerChip(winners[i], i));
-      confetti();
-      await sleep(500);
-    }
-    return winners;
   }
 
   async function draw() {
@@ -377,27 +305,21 @@
 
     if (!pool.length) { $('error').textContent = '추첨할 번호가 없어요. 번호를 입력해 주세요.'; return; }
     if (!count || count < 1) { $('error').textContent = '당첨 인원을 1명 이상으로 입력해 주세요.'; return; }
-    if (count > pool.length) { $('error').textContent = `참여 번호(${pool.length}개)보다 당첨 인원이 많아요.`; return; }
-
-    if (method === 'race') {
-      if (!window.Matter) { $('error').textContent = '구슬 경주를 불러오지 못했어요. matter.min.js 파일이 같은 폴더에 있는지 확인하거나 빠른 추첨을 이용해 주세요.'; return; }
-      if (pool.length > Race.MAX) { $('error').textContent = `구슬 경주는 ${Race.MAX}명까지 가능해요. 인원이 많으면 빠른 추첨을 이용해 주세요.`; return; }
-    }
+    if (count >= pool.length) { $('error').textContent = `당첨 인원은 참여 인원(${pool.length}명)보다 적어야 해요.`; return; }
+    if (!window.Matter) { $('error').textContent = '미로를 불러오지 못했어요. matter.min.js 파일이 같은 폴더에 있는지, 인터넷이 연결되어 있는지 확인해 주세요.'; return; }
+    if (pool.length > Race.MAX) { $('error').textContent = `한 번에 ${Race.MAX}명까지 참여할 수 있어요.`; return; }
 
     $('drawBtn').disabled = true;
-    let winners;
-    if (method === 'race') {
-      winners = await Race.run(pool, count, rule);
-      if (winners) {
-        $('stage').innerHTML = `<span class="placeholder">구슬 경주 결과 (${rule === 'last' ? '끝까지 남은 구슬' : '먼저 도착한 구슬'})</span>`;
-        $('winners').innerHTML = '';
-        winners.forEach((w, i) => $('winners').appendChild(winnerChip(w, i)));
-      }
-    } else {
-      winners = await quickDraw(pool, count);
-    }
+    const winners = await Race.run(pool, count);
     $('drawBtn').disabled = false;
-    if (winners) record(pool.length, winners);
+    if (!winners) return;
+
+    $('resultLabel').textContent = `${pool.length}개 공 중 끝까지 살아남은 공`;
+    $('winners').innerHTML = '';
+    winners.forEach((w, i) => $('winners').appendChild(winnerChip(w, i)));
+    history.push({ time: new Date().toLocaleString('ko-KR'), total: pool.length, winners });
+    renderHistory();
+    save();
   }
 
   // 간단한 꽃가루 효과
@@ -406,9 +328,9 @@
     const ctx = c.getContext('2d');
     c.width = innerWidth; c.height = innerHeight;
     const colors = ['#ff6b35', '#ffc23d', '#4ecdc4', '#ff4f81', '#7b61ff'];
-    const parts = Array.from({ length: 120 }, () => ({
+    const parts = Array.from({ length: 160 }, () => ({
       x: c.width / 2, y: c.height / 3,
-      vx: (Math.random() - 0.5) * 14, vy: Math.random() * -12 - 4,
+      vx: (Math.random() - 0.5) * 16, vy: Math.random() * -14 - 4,
       s: Math.random() * 6 + 4, color: colors[Math.floor(Math.random() * colors.length)], r: Math.random() * 6,
     }));
     let frame = 0;
@@ -420,97 +342,111 @@
         ctx.fillStyle = p.color; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
         ctx.restore();
       });
-      if (++frame < 90) requestAnimationFrame(tick);
+      if (++frame < 100) requestAnimationFrame(tick);
       else ctx.clearRect(0, 0, c.width, c.height);
     })();
   }
 
-  // ───────────────────────── 구슬 경주 ─────────────────────────
-  // 구슬마다 크기·무게·탄성이 모두 같고, 출발 위치만 암호학적 난수로 섞어서 배치해요.
+  // ───────────────────────── 서바이벌 미로 ─────────────────────────
+  // 공마다 크기·무게·탄성이 모두 같고, 출발 위치만 암호학적 난수로 섞어서 배치해요.
   // 그 뒤로는 물리 엔진이 굴리는 대로 결과가 나오기 때문에 누구도 결과를 조작할 수 없어요.
+  // 맨 아래 구멍에 빠지면 탈락이고, 마지막까지 남은 공이 당첨이에요.
   const Race = (() => {
     const MAX = 300;
-    const L = 40, R = 680, CX = 360;   // 코스 안쪽 벽의 x 좌표
+    const L = 40, R = 680, CX = 360;   // 미로 바깥 벽의 x 좌표
     const GATE_Y = 200;
     const STEP = 1000 / 120;
-    const NEON = '#2ef2ff';
+    const NEON = '#2ef2ff', PINK = '#ff3d9a', GOLD = '#ffc23d', RED = '#ff2d55';
 
-    let M, engine, statics, spinners, balls, finished, finishY, topY;
-    let canvas, ctx, dpr, cw, ch, cam, speed, started, countdownEnd, ended, stopped;
-    let need, raceRule, resolveRun, raf, gate;
+    let M, engine, statics, movers, balls, alive, total, need, pitY, topY, gate;
+    let canvas, ctx, dpr, cw, ch, cam, zoom, speed, started, countdownEnd, ended, stopped;
+    let simTime, acc, particles, toasts, shake, resolveRun, raf;
 
+    // ── 코스 부품 ──
+    function add(b, kind) { b.kind = kind; statics.push(b); return b; }
     function seg(x1, y1, x2, y2, t = 14) {
       const len = Math.hypot(x2 - x1, y2 - y1);
       const b = M.Bodies.rectangle((x1 + x2) / 2, (y1 + y2) / 2, len + t, t, {
         isStatic: true, angle: Math.atan2(y2 - y1, x2 - x1), friction: 0.01, restitution: 0.3,
       });
-      b.kind = 'wall';
       b.line = [x1, y1, x2, y2];
-      statics.push(b);
-      return b;
+      return add(b, 'wall');
     }
-    function peg(x, y) {
-      const b = M.Bodies.circle(x, y, 6, { isStatic: true, restitution: 0.6 });
-      b.kind = 'peg';
-      statics.push(b);
+    function path(pts) {
+      for (let i = 1; i < pts.length; i++) seg(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
     }
-    function diamond(x, y) {
-      const b = M.Bodies.polygon(x, y, 4, 18, { isStatic: true, restitution: 0.9, angle: Math.PI / 4 });
-      b.kind = 'poly';
-      statics.push(b);
-    }
+    function peg(x, y) { add(M.Bodies.circle(x, y, 6, { isStatic: true, restitution: 0.6 }), 'peg'); }
+    function slat(x, y, len, angle) { add(M.Bodies.rectangle(x, y, len, 8, { isStatic: true, angle, restitution: 0.4 }), 'poly'); }
+    function diamond(x, y) { add(M.Bodies.polygon(x, y, 4, 18, { isStatic: true, restitution: 0.9, angle: Math.PI / 4 }), 'poly'); }
+    function kicker(x, y) { add(M.Bodies.circle(x, y, 20, { isStatic: true, restitution: 1 }), 'kick'); }
     function spinner(x, y, len, spin) {
-      const b = M.Bodies.rectangle(x, y, len, 14, { isStatic: true, restitution: 0.5, friction: 0.05 });
-      b.kind = 'poly';
-      b.spin = spin;
-      spinners.push(b);
-      statics.push(b);
+      const b = add(M.Bodies.rectangle(x, y, len, 14, { isStatic: true, restitution: 0.5, friction: 0.05 }), 'poly');
+      b.move = () => M.Body.setAngle(b, b.angle + spin / 2, true);
+      movers.push(b);
     }
-    function pegField(y0, rows) {
+    function slider(y, len, cx, amp, period, phase) {
+      const b = add(M.Bodies.rectangle(cx, y, len, 14, { isStatic: true, restitution: 0.5 }), 'poly');
+      b.move = (t) => M.Body.setPosition(b, { x: cx + amp * Math.sin((t / period) * Math.PI * 2 + phase), y }, true);
+      movers.push(b);
+    }
+    function chevrons(y0, rows) {
       for (let r = 0; r < rows; r++) {
-        const off = r % 2 ? 32 : 0;
-        for (let x = L + 32 + off; x < R - 20; x += 64) peg(x, y0 + r * 55);
+        const off = r % 2 ? 50 : 0;
+        for (let x = L + 60 + off; x < R - 40; x += 100) slat(x, y0 + r * 95, 64, r % 2 ? 0.5 : -0.5);
       }
     }
 
     function buildCourse() {
       statics = [];
-      spinners = [];
+      movers = [];
       // 출발 대기실 + 출발 게이트
       seg(L, -4000, L, GATE_Y); seg(R, -4000, R, GATE_Y);
       gate = seg(L, GATE_Y, R, GATE_Y);
       gate.kind = 'gate';
-      // 첫 번째 깔때기
-      seg(L, GATE_Y, 280, 470); seg(R, GATE_Y, 440, 470);
-      seg(280, 470, 280, 540); seg(440, 470, 440, 540);
-      seg(280, 540, L, 740); seg(440, 540, R, 740);
-      seg(L, 740, L, 4250); seg(R, 740, R, 4250);
-      // 핀 구간
-      pegField(800, 11);
-      // 지그재그 미끄럼틀
-      seg(L, 1450, R - 120, 1530);
-      seg(R, 1620, L + 120, 1700);
-      seg(L, 1790, R - 120, 1870);
-      seg(R, 1960, L + 120, 2040);
-      // 회전 막대 구간
-      spinner(200, 2200, 230, 0.035); spinner(520, 2200, 230, -0.035);
-      spinner(360, 2400, 280, 0.03);
-      spinner(200, 2600, 230, -0.04); spinner(520, 2600, 230, 0.04);
-      // 다이아몬드 범퍼 구간
-      for (let r = 0; r < 4; r++) {
-        const off = r % 2 ? 55 : 0;
-        for (let x = L + 60 + off; x < R - 30; x += 110) diamond(x, 2780 + r * 100);
+      // ① 첫 번째 깔때기
+      seg(L, GATE_Y, 240, 440); seg(R, GATE_Y, 480, 440);
+      seg(240, 440, 240, 500); seg(480, 440, 480, 500);
+      seg(240, 500, L, 680); seg(480, 500, R, 680);
+      seg(L, 680, L, 5100); seg(R, 680, R, 5100);
+      // ② 빗살 장애물
+      chevrons(740, 4);
+      // ③ 두 갈래 길 (왼쪽은 핀밭, 오른쪽은 지그재그)
+      seg(300, 1240, 360, 1180); seg(360, 1180, 420, 1240);
+      seg(300, 1240, 300, 1860); seg(420, 1240, 420, 1860);
+      seg(300, 1860, 360, 1920); seg(420, 1860, 360, 1920);
+      for (let r = 0, y = 1290; y < 1840; r++, y += 60) {
+        for (let x = 72 + (r % 2 ? 28 : 0); x < 290; x += 56) peg(x, y);
       }
-      // 두 번째 깔때기 + 회전 날개
-      seg(L, 3180, 310, 3400); seg(R, 3180, 410, 3400);
-      seg(310, 3400, 310, 3450); seg(410, 3400, 410, 3450);
-      seg(310, 3450, L, 3650); seg(410, 3450, R, 3650);
-      spinner(360, 3530, 150, 0.06);
-      // 마지막 핀 구간 + 결승 깔때기
-      pegField(3720, 8);
-      seg(L, 4180, 300, 4400); seg(R, 4180, 420, 4400);
-      seg(300, 4400, 300, 4520); seg(420, 4400, 420, 4520);
-      finishY = 4470;
+      seg(420, 1300, 620, 1360); seg(R, 1450, 480, 1510);
+      seg(420, 1600, 620, 1660); seg(R, 1750, 480, 1810);
+      // ④ 회전 막대 구간
+      spinner(200, 2000, 220, 0.04); spinner(520, 2000, 220, -0.04);
+      spinner(360, 2190, 240, 0.05); spinner(110, 2190, 120, -0.07); spinner(610, 2190, 120, 0.07);
+      spinner(200, 2370, 220, -0.045); spinner(520, 2370, 220, 0.045);
+      // ⑤ 지그재그 미로 통로
+      seg(L, 2480, 280, 2560); seg(R, 2480, 440, 2560);
+      path([[280, 2560], [480, 2760], [80, 3010], [480, 3260], [280, 3360]]);
+      path([[440, 2560], [640, 2760], [240, 3010], [640, 3260], [440, 3360]]);
+      seg(280, 3360, L, 3480); seg(440, 3360, R, 3480);
+      // ⑥ 튕겨내는 범퍼 (핑볼)
+      for (let r = 0; r < 4; r++) {
+        const off = r % 2 ? 65 : 0;
+        for (let x = L + 80 + off; x < R - 50; x += 130) kicker(x, 3560 + r * 120);
+      }
+      // ⑦ 좌우로 움직이는 막대
+      slider(4080, 200, CX, 200, 2400, 0);
+      slider(4230, 200, CX, 200, 2000, Math.PI);
+      slider(4380, 200, CX, 200, 2800, Math.PI / 2);
+      // ⑧ 빗살 + 다이아몬드
+      chevrons(4480, 3);
+      for (let r = 0; r < 2; r++) {
+        for (let x = 120 + (r % 2 ? 60 : 0); x < R - 40; x += 120) diamond(x, 4800 + r * 100);
+      }
+      // ⑨ 마지막 깔때기 + 탈락 구멍
+      seg(L, 5000, 300, 5260); seg(R, 5000, 420, 5260);
+      spinner(CX, 5170, 150, 0.06);
+      seg(300, 5260, 300, 5420); seg(420, 5260, 420, 5420);
+      pitY = 5380;
     }
 
     function spawnBalls(entries) {
@@ -524,9 +460,11 @@
         const x = L + 20 + r + col * gap + random() * 4;
         const y = GATE_Y - 20 - r - row * gap;
         const b = M.Bodies.circle(x, y, r, { restitution: 0.4, friction: 0.01, frictionAir: 0.012, density: 0.002 });
+        b.isBall = true;
         b.label = e.label;
         b.color = `hsl(${(e.i * 137.5) % 360}, 90%, 62%)`;
         b.r = r;
+        b.trail = [];
         b.checkY = y;
         b.checkT = 0;
         return b;
@@ -542,64 +480,77 @@
       canvas.height = ch * dpr;
     }
 
-    let simTime = 0;
+    // ── 물리 진행 ──
+    function onCollision(e) {
+      for (const p of e.pairs) {
+        let s = p.bodyA, b = p.bodyB;
+        if (s.isBall) [s, b] = [b, s];
+        if (!b.isBall || s.isBall) continue;
+        s.flash = simTime;
+        if (s.kind === 'kick') {
+          const dx = b.position.x - s.position.x, dy = b.position.y - s.position.y;
+          const d = Math.hypot(dx, dy) || 1;
+          M.Body.setVelocity(b, { x: (dx / d) * 11, y: (dy / d) * 11 });
+        }
+      }
+    }
+
     function step() {
-      for (const s of spinners) M.Body.setAngle(s, s.angle + s.spin / 2, true);
+      for (const m of movers) m.move(simTime);
       M.Engine.update(engine, STEP);
       simTime += STEP;
       for (const b of balls) {
-        if (b.done) continue;
+        if (b.out || b.win) continue;
         // 너무 빨라서 벽을 뚫지 않도록 속도 제한
         const v = b.velocity, sp = Math.hypot(v.x, v.y);
-        if (sp > 16) M.Body.setVelocity(b, { x: v.x * 16 / sp, y: v.y * 16 / sp });
+        if (sp > 16) M.Body.setVelocity(b, { x: (v.x * 16) / sp, y: (v.y * 16) / sp });
         // 만약 코스 밖으로 튕겨 나가면 가운데로 되돌리기
         if (b.position.x < L - 30 || b.position.x > R + 30) {
           M.Body.setPosition(b, { x: CX, y: b.position.y });
           M.Body.setVelocity(b, { x: 0, y: 0 });
         }
-        if (!started) continue;
-        if (b.position.y > finishY) {
-          b.done = true;
-          finished.push(b);
-          M.Composite.remove(engine.world, b);
+        if (!started || ended) continue;
+        if (b.position.y > pitY) {
+          eliminate(b);
           continue;
         }
         // 어딘가에 끼어서 2초 넘게 못 내려가면 살짝 흔들어주기
         if (simTime - b.checkT > 2000) {
-          if (b.position.y - b.checkY < 15) {
-            M.Body.setVelocity(b, { x: (random() - 0.5) * 8, y: -3 });
-          }
+          if (b.position.y - b.checkY < 15) M.Body.setVelocity(b, { x: (random() - 0.5) * 8, y: -3 });
           b.checkY = b.position.y;
           b.checkT = simTime;
         }
       }
-      if (started && !ended) checkEnd();
     }
 
-    function checkEnd() {
-      let winners = null;
-      if (raceRule === 'first' && finished.length >= need) {
-        winners = finished.slice(0, need);
-      } else if (raceRule === 'last') {
-        const left = balls.filter((b) => !b.done);
-        if (left.length <= need) winners = left.sort((a, b) => a.position.y - b.position.y);
+    function eliminate(b) {
+      b.out = true;
+      alive--;
+      M.Composite.remove(engine.world, b);
+      for (let i = 0; i < 28; i++) {
+        const a = random() * Math.PI * 2, s = 2 + random() * 6;
+        particles.push({ x: b.position.x, y: b.position.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 3, life: 1, color: b.color });
       }
-      if (!winners) return;
+      shake = 14;
+      toasts.push({ text: `💥 ${b.label} 탈락!`, color: b.color, t: performance.now() });
+      if (alive === need) finish();
+    }
+
+    function finish() {
       ended = true;
-      winners.forEach((b) => { b.win = true; });
-      setTimeout(() => showResult(winners), 1200);
+      const winners = balls.filter((b) => !b.out);
+      winners.forEach((b) => { b.win = true; M.Body.setStatic(b, true); });
+      confetti();
+      setTimeout(() => showResult(winners), 2600);
     }
 
     function showResult(winners) {
       if (stopped) return;
-      $('raceResultInfo').textContent = raceRule === 'last'
-        ? `${balls.length}개 구슬 중 끝까지 남은 ${winners.length}개`
-        : `${balls.length}개 구슬 중 먼저 도착한 ${winners.length}개`;
+      $('raceResultInfo').textContent = `${total}개 공 중 끝까지 살아남은 ${winners.length}개`;
       const box = $('raceWinners');
       box.innerHTML = '';
       winners.forEach((b, i) => box.appendChild(winnerChip(b.label, i)));
       $('raceResult').classList.remove('hidden');
-      confetti();
       $('raceOk').onclick = () => close(winners.map((b) => b.label));
     }
 
@@ -614,21 +565,35 @@
       resolveRun(result);
     }
 
-    function cameraTarget() {
-      const left = balls.filter((b) => !b.done);
-      if (!started || !left.length) return null;
-      // 먼저 도착 모드는 선두를, 꼴찌 모드는 맨 뒤 구슬을 따라가요
-      return left.reduce((a, b) => (raceRule === 'last'
-        ? (b.position.y < a.position.y ? b : a)
-        : (b.position.y > a.position.y ? b : a)));
+    // 구멍에 가장 가까운(= 다음 탈락 위기) 공
+    function leader() {
+      let best = null;
+      for (const b of balls) if (!b.out && (!best || b.position.y > best.position.y)) best = b;
+      return best;
     }
 
-    function render(now) {
-      const scale = Math.min(ch / 450, cw / 360);
+    // 카메라가 볼 공: 구멍 근처에선 선두를, 아직 멀면 앞쪽 무리를 따라가요
+    function focusBall(lead) {
+      if (!lead || pitY - lead.position.y < 700) return lead;
+      const list = balls.filter((b) => !b.out).sort((a, b) => b.position.y - a.position.y);
+      return list[Math.floor(list.length * 0.15)];
+    }
+
+    // ── 그리기 ──
+    function render(now, lead, focus, dramatic) {
+      // 카메라: 탈락 위기의 공을 따라가고, 끝나면 생존자에게 확대
+      let tx = CX, ty = GATE_Y - 120;
+      if (ended) {
+        const w = balls.filter((b) => b.win);
+        tx = w.reduce((s, b) => s + b.position.x, 0) / w.length;
+        ty = w.reduce((s, b) => s + b.position.y, 0) / w.length;
+      } else if (started && focus) {
+        tx = focus.position.x;
+        ty = focus.position.y;
+      }
+      zoom += ((ended ? (need > 1 ? 1 : 1.6) : dramatic ? 1.3 : 1) - zoom) * 0.04;
+      const scale = Math.min(ch / 450, cw / 360) * zoom;
       const viewW = cw / scale, viewH = ch / scale;
-      const t = cameraTarget();
-      const ty = t ? t.position.y : (started ? cam.y : GATE_Y - 120);
-      const tx = t ? t.position.x : CX;
       cam.y += (ty - cam.y) * 0.08;
       if (viewW >= R - L + 80) cam.x = CX;
       else cam.x += (Math.max(L - 40 + viewW / 2, Math.min(R + 40 - viewW / 2, tx)) - cam.x) * 0.08;
@@ -638,24 +603,28 @@
       ctx.fillRect(0, 0, cw, ch);
 
       ctx.save();
-      ctx.translate(cw / 2, ch / 2);
+      ctx.translate(cw / 2 + (Math.random() - 0.5) * shake, ch / 2 + (Math.random() - 0.5) * shake);
+      shake *= 0.9;
       ctx.scale(scale, scale);
       ctx.translate(-cam.x, -cam.y);
       const y0 = cam.y - viewH / 2 - 100, y1 = cam.y + viewH / 2 + 100;
       const visible = (b) => b.bounds.max.y > y0 && b.bounds.min.y < y1;
 
-      // 결승선
-      if (finishY > y0 && finishY < y1) {
-        for (let x = 300, k = 0; x < 420; x += 10, k++) {
-          ctx.fillStyle = k % 2 ? '#fff' : '#333';
-          ctx.fillRect(x, finishY - 5, 10, 5);
-          ctx.fillStyle = k % 2 ? '#333' : '#fff';
-          ctx.fillRect(x, finishY, 10, 5);
-        }
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 16px sans-serif';
+      // 탈락 구멍
+      if (pitY > y0 && pitY < y1 + 200) {
+        const pulse = 0.6 + 0.4 * Math.sin(now / 200);
+        const g = ctx.createLinearGradient(0, pitY - 40, 0, pitY + 40);
+        g.addColorStop(0, 'rgba(255,45,85,0)');
+        g.addColorStop(1, `rgba(255,45,85,${0.7 * pulse})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(300, pitY - 40, 120, 80);
+        ctx.fillStyle = RED;
+        ctx.shadowColor = RED;
+        ctx.shadowBlur = 20;
+        ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('FINISH', CX, finishY + 30);
+        ctx.fillText('💀 탈락', CX, pitY + 70);
+        ctx.shadowBlur = 0;
       }
 
       // 벽 (흰색 네온)
@@ -676,8 +645,8 @@
       // 출발 게이트
       if (!started) {
         ctx.setLineDash([12, 10]);
-        ctx.strokeStyle = '#ffc23d';
-        ctx.shadowColor = '#ffc23d';
+        ctx.strokeStyle = GOLD;
+        ctx.shadowColor = GOLD;
         ctx.beginPath();
         ctx.moveTo(L, GATE_Y);
         ctx.lineTo(R, GATE_Y);
@@ -685,67 +654,97 @@
         ctx.setLineDash([]);
       }
 
-      // 장애물 (하늘색 네온)
-      ctx.shadowColor = NEON;
-      ctx.fillStyle = NEON;
+      // 장애물 (부딪히면 하얗게 번쩍)
       for (const b of statics) {
         if (!visible(b) || b.kind === 'wall' || b.kind === 'gate') continue;
+        const hit = b.flash !== undefined && simTime - b.flash < 160;
+        const color = hit ? '#fff' : b.kind === 'kick' ? PINK : NEON;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = hit ? 25 : 10;
         ctx.beginPath();
         if (b.kind === 'peg') {
           ctx.arc(b.position.x, b.position.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (b.kind === 'kick') {
+          ctx.arc(b.position.x, b.position.y, hit ? 23 : 20, 0, Math.PI * 2);
+          ctx.lineWidth = 5;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(b.position.x, b.position.y, 8, 0, Math.PI * 2);
+          ctx.fill();
         } else {
           b.vertices.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y)));
           ctx.closePath();
+          ctx.fill();
         }
-        ctx.fill();
       }
       ctx.shadowBlur = 0;
 
-      // 구슬 + 번호
-      ctx.textAlign = 'left';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#000';
+      // 공 꼬리
+      ctx.lineCap = 'round';
       for (const b of balls) {
-        if (b.done || b.position.y < y0 || b.position.y > y1) continue;
+        if (b.out || b.trail.length < 2 || b.position.y < y0 || b.position.y > y1) continue;
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = b.r * 1.2;
+        ctx.beginPath();
+        b.trail.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // 공 + 번호
+      ctx.textAlign = 'left';
+      for (const b of balls) {
+        if (b.out || b.position.y < y0 || b.position.y > y1) continue;
+        if (b.win) {
+          const pr = b.r + 8 + 4 * Math.sin(now / 150);
+          ctx.strokeStyle = GOLD;
+          ctx.shadowColor = GOLD;
+          ctx.shadowBlur = 20;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(b.position.x, b.position.y, pr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
         ctx.fillStyle = b.color;
         ctx.beginPath();
         ctx.arc(b.position.x, b.position.y, b.r, 0, Math.PI * 2);
         ctx.fill();
-        if (b === t) {
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = 2;
+        if (b === lead && !ended) {
+          ctx.strokeStyle = RED;
+          ctx.lineWidth = 2.5;
           ctx.stroke();
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 3;
         }
-        ctx.font = `bold ${b.r + 4}px sans-serif`;
-        ctx.strokeText(b.label, b.position.x + b.r - 2, b.position.y + b.r + 10);
-        ctx.fillText(b.label, b.position.x + b.r - 2, b.position.y + b.r + 10);
+        const fs = b.win ? b.r + 10 : b.r + 4;
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText(b.label, b.position.x + b.r - 2, b.position.y + b.r + fs - 2);
+        ctx.fillText(b.label, b.position.x + b.r - 2, b.position.y + b.r + fs - 2);
       }
+
+      // 탈락 파편
+      for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+      }
+      ctx.globalAlpha = 1;
       ctx.restore();
 
       drawMinimap(viewH);
-      drawRanking();
-
-      // 출발 카운트다운
-      if (!started) {
-        const n = Math.ceil((countdownEnd - now) / 1000);
-        ctx.fillStyle = '#ffc23d';
-        ctx.font = `900 ${Math.min(cw, ch) * 0.25}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = '#ffc23d';
-        ctx.shadowBlur = 30;
-        ctx.fillText(n > 0 ? n : 'GO!', cw / 2, ch / 2);
-        ctx.shadowBlur = 0;
-        ctx.textBaseline = 'alphabetic';
-      }
+      drawSurvivors(lead);
+      drawHud(now, dramatic);
     }
 
     function drawMinimap(viewH) {
       const narrow = cw < 600;
-      const h = narrow ? ch * 0.45 : ch - 24;
-      const s = h / (finishY + 60 - topY);
+      const h = narrow ? ch * 0.4 : ch - 24;
+      const s = h / (pitY + 60 - topY);
       const w = (R - L + 40) * s;
       const ox = 12 - (L - 20) * s, oy = 12 - topY * s;
       ctx.fillStyle = 'rgba(30, 30, 34, .75)';
@@ -762,46 +761,110 @@
         ctx.lineTo(ox + x2 * s, oy + Math.max(yB, topY) * s);
       }
       ctx.stroke();
-      ctx.fillStyle = NEON;
       for (const b of statics) {
-        if (b.kind === 'peg' || b.kind === 'poly') ctx.fillRect(ox + b.position.x * s - 1, oy + b.position.y * s - 1, 2, 2);
+        if (b.kind === 'wall' || b.kind === 'gate') continue;
+        ctx.fillStyle = b.kind === 'kick' ? PINK : NEON;
+        ctx.fillRect(ox + b.position.x * s - 1, oy + b.position.y * s - 1, 2, 2);
       }
+      ctx.fillStyle = RED;
+      ctx.fillRect(ox + 300 * s, oy + pitY * s - 2, 120 * s, 4);
       for (const b of balls) {
-        if (b.done) continue;
+        if (b.out) continue;
         ctx.fillStyle = b.color;
         ctx.fillRect(ox + b.position.x * s - 1.5, oy + b.position.y * s - 1.5, 3, 3);
       }
-      ctx.strokeStyle = '#ffc23d';
+      ctx.strokeStyle = GOLD;
       ctx.strokeRect(12, oy + (cam.y - viewH / 2) * s, w, viewH * s);
     }
 
-    function drawRanking() {
+    // 오른쪽 목록: 살아있는 공을 "탈락 위기 순"으로
+    function drawSurvivors(lead) {
       const narrow = cw < 600;
       const lineH = narrow ? 15 : 18;
-      const order = [...finished, ...balls.filter((b) => !b.done).sort((a, b) => b.position.y - a.position.y)];
-      const maxLines = Math.max(3, Math.floor((narrow ? ch * 0.45 : ch - 70) / lineH) - 1);
-      const lines = order.slice(0, order.length > maxLines ? maxLines - 1 : maxLines).map((b, i) => ({
-        text: `${b.done ? '✓ ' : ''}${b.label}  #${i + 1}`, color: b.color, win: b.win,
+      const list = balls.filter((b) => !b.out).sort((a, b) => b.position.y - a.position.y);
+      const maxLines = Math.max(3, Math.floor((narrow ? ch * 0.4 : ch - 160) / lineH) - 1);
+      const lines = list.slice(0, list.length > maxLines ? maxLines - 1 : maxLines).map((b) => ({
+        text: `${b.win ? '🏆 ' : b === lead ? '⚠️ ' : ''}${b.label}`, color: b.color, win: b.win,
       }));
-      if (order.length > maxLines) lines.push({ text: `… 외 ${order.length - maxLines + 1}개`, color: '#aaa' });
+      if (list.length > maxLines) lines.push({ text: `… 외 ${list.length - maxLines + 1}개`, color: '#aaa' });
       ctx.font = `bold ${narrow ? 12 : 14}px sans-serif`;
-      const head = `완주 ${finished.length} / ${balls.length}`;
-      const w = Math.max(ctx.measureText(head).width, ...lines.map((l) => ctx.measureText((l.win ? '🏆 ' : '') + l.text).width)) + 20;
-      const x = cw - w - 12;
+      const head = ended ? '최후의 생존자' : '탈락 위기 순';
+      const w = Math.max(ctx.measureText(head).width, ...lines.map((l) => ctx.measureText(l.text).width)) + 20;
+      const x = cw - w - 12, top = narrow ? 84 : 12;
       ctx.fillStyle = 'rgba(30, 30, 34, .75)';
-      ctx.fillRect(x, 12, w, lineH * (lines.length + 1) + 12);
+      ctx.fillRect(x, top, w, lineH * (lines.length + 1) + 12);
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(head, cw - 22, 12 + lineH);
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(head, cw - 22, top + lineH);
       lines.forEach((l, i) => {
-        const y = 12 + lineH * (i + 2);
+        const y = top + lineH * (i + 2);
         if (l.win) {
           ctx.fillStyle = 'rgba(255, 194, 61, .3)';
           ctx.fillRect(x + 4, y - lineH + 4, w - 8, lineH);
         }
         ctx.fillStyle = l.color;
-        ctx.fillText((l.win ? '🏆 ' : '') + l.text, cw - 22, y);
+        ctx.fillText(l.text, cw - 22, y);
       });
+    }
+
+    // 가운데 위: 생존 수, 탈락 알림, 긴장감 문구
+    function drawHud(now, dramatic) {
+      ctx.textAlign = 'center';
+      const narrow = cw < 600;
+      const cx = cw / 2;
+      ctx.fillStyle = 'rgba(20, 20, 24, .8)';
+      const bw = narrow ? 150 : 220, bh = narrow ? 58 : 72;
+      ctx.fillRect(cx - bw / 2, 12, bw, bh);
+      ctx.strokeStyle = ended ? GOLD : 'rgba(46, 242, 255, .5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - bw / 2, 12, bw, bh);
+      ctx.fillStyle = '#fff';
+      ctx.font = `900 ${narrow ? 26 : 34}px sans-serif`;
+      ctx.fillText(`생존 ${alive}`, cx, 12 + (narrow ? 32 : 42));
+      ctx.font = `bold ${narrow ? 11 : 13}px sans-serif`;
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`${total}개 중 · ${need}개 남으면 끝!`, cx, 12 + bh - 10);
+
+      // 탈락 알림
+      const t = performance.now();
+      toasts = toasts.filter((x) => t - x.t < 2200).slice(-4);
+      ctx.font = `bold ${narrow ? 14 : 18}px sans-serif`;
+      toasts.forEach((x, i) => {
+        ctx.globalAlpha = Math.min(1, (2200 - (t - x.t)) / 500);
+        ctx.fillStyle = x.color;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 4;
+        const y = 12 + bh + 26 + i * (narrow ? 20 : 26);
+        ctx.strokeText(x.text, cx, y);
+        ctx.fillText(x.text, cx, y);
+      });
+      ctx.globalAlpha = 1;
+
+      const banner = (text, color) => {
+        ctx.font = `900 ${narrow ? 24 : 40}px sans-serif`;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 25;
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(now / 120);
+        ctx.fillText(text, cx, ch * 0.72);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+      };
+      if (dramatic) banner('🔥 마지막 탈락자는 누구?!', RED);
+      if (ended) banner('🏆 최후의 생존자!', GOLD);
+
+      // 출발 카운트다운
+      if (!started) {
+        const n = Math.ceil((countdownEnd - now) / 1000);
+        ctx.fillStyle = GOLD;
+        ctx.font = `900 ${Math.min(cw, ch) * 0.25}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = GOLD;
+        ctx.shadowBlur = 30;
+        ctx.fillText(n > 0 ? n : 'GO!', cx, ch / 2);
+        ctx.shadowBlur = 0;
+        ctx.textBaseline = 'alphabetic';
+      }
     }
 
     function frame(now) {
@@ -811,26 +874,47 @@
         M.Composite.remove(engine.world, gate);
         for (const b of balls) b.checkT = simTime;
       }
-      const steps = started ? 2 * speed : 2;
-      for (let i = 0; i < steps; i++) step();
-      render(now);
+      let lead = leader();
+      const dramatic = started && !ended && alive === need + 1;
+      let rate = started ? speed : 1;
+      // 마지막 한 명이 탈락하기 직전엔 슬로모션
+      if (dramatic && lead && pitY - lead.position.y < 320) rate = Math.min(rate, 0.35);
+      acc += 2 * rate;
+      while (acc >= 1) { step(); acc -= 1; }
+      lead = leader();
+
+      for (const b of balls) {
+        if (b.out) continue;
+        b.trail.push({ x: b.position.x, y: b.position.y });
+        if (b.trail.length > 7) b.trail.shift();
+      }
+      for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.life -= 0.025; }
+      particles = particles.filter((p) => p.life > 0);
+
+      render(now, lead, focusBall(lead), dramatic);
       raf = requestAnimationFrame(frame);
     }
 
-    function run(entries, count, ruleName) {
+    function run(entries, count) {
       M = window.Matter;
       need = count;
-      raceRule = ruleName;
-      finished = [];
+      total = entries.length;
+      alive = total;
       started = false;
       ended = false;
       stopped = false;
       speed = 1;
       simTime = 0;
+      acc = 0;
+      zoom = 1;
+      shake = 0;
+      particles = [];
+      toasts = [];
       buildCourse();
       spawnBalls(entries);
       engine = M.Engine.create({ positionIterations: 8, velocityIterations: 6 });
       M.Composite.add(engine.world, [...statics, ...balls]);
+      M.Events.on(engine, 'collisionStart', onCollision);
 
       canvas = $('raceCanvas');
       ctx = canvas.getContext('2d');
@@ -840,7 +924,7 @@
       window.addEventListener('resize', resize);
       cam = { x: CX, y: GATE_Y - 120 };
       countdownEnd = performance.now() + 3000;
-      $('raceInfo').textContent = `${ruleName === 'last' ? '끝까지 남은' : '먼저 도착한'} ${count}명 당첨`;
+      $('raceInfo').textContent = `끝까지 살아남은 ${count}명 당첨`;
       $('speedBtn').textContent = '속도 1x';
       $('speedBtn').onclick = () => {
         speed = speed >= 4 ? 1 : speed * 2;
@@ -855,8 +939,6 @@
   })();
 
   document.querySelectorAll('#inputTabs .tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
-  document.querySelectorAll('#methodTabs .tab').forEach((t) => t.addEventListener('click', () => setMethod(t.dataset.method)));
-  document.querySelectorAll('#ruleTabs .tab').forEach((t) => t.addEventListener('click', () => setRule(t.dataset.rule)));
   ['numbers', 'rangeStart', 'rangeEnd', 'winnerCount'].forEach((id) => $(id).addEventListener('input', updateCount));
   ['dedupe', 'excludePrev'].forEach((id) => $(id).addEventListener('change', updateCount));
   $('drawBtn').addEventListener('click', draw);
