@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "homepaetion-ai-office",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // 모델을 바꾸려면 여기 값을 수정. API 키와 비밀번호는 secret으로 넣는다 (README 참고)
+  "vars": {
+    "CLAUDE_MODEL": "claude-opus-5-5"
+  }
+}

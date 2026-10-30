@@ -14,7 +14,7 @@ AI 직원들이 앉아 있는 가상 사무실입니다. 책상을 클릭해 업
 | 💻 코디 | 개발자 | HTML/CSS/JS 코드, 반응형, 폼·지도 연동 |
 | 🗂️ 한별 | 경영지원 | 고객 메일, 계약 체크리스트, 세금계산서 안내 |
 
-직원을 추가하거나 성격을 바꾸려면 `lib/agents.js`만 수정하면 됩니다.
+직원을 추가하거나 성격을 바꾸려면 `src/agents.js`만 수정하면 됩니다.
 
 ## 사무실 배치
 
@@ -40,40 +40,52 @@ AI 직원들이 앉아 있는 가상 사무실입니다. 책상을 클릭해 업
 
 ## 로컬에서 실행
 
-Node.js 20.12 이상이 필요합니다.
+Node.js 20 이상이 필요합니다.
 
 ```bash
 cd ai-office
 npm install
-cp .env.example .env   # .env 파일에 ANTHROPIC_API_KEY 입력
-npm start              # http://localhost:3000
+cp .dev.vars.example .dev.vars   # .dev.vars 파일에 ANTHROPIC_API_KEY 입력
+npm run dev                      # http://localhost:8787
 ```
 
-API 키는 [Anthropic 콘솔](https://console.anthropic.com)에서 발급합니다. 키는 서버에서만 사용되고 브라우저로 전달되지 않습니다.
+API 키는 [Anthropic 콘솔](https://console.anthropic.com)에서 발급합니다. 키는 서버(Worker)에서만 쓰이고 브라우저로 전달되지 않습니다.
 
-## Vercel로 배포
+## Cloudflare에 배포
 
-1. Vercel에서 이 저장소를 Import하고 **Root Directory**를 `ai-office`로 지정
-2. Environment Variables에 `ANTHROPIC_API_KEY`와 `OFFICE_PASSWORD` 추가
-3. Deploy
+처음 한 번만 Cloudflare 계정에 로그인하고 비밀값을 등록합니다.
 
-> ⚠️ 배포할 때는 꼭 `OFFICE_PASSWORD`를 설정하세요. 설정하지 않으면 주소를 아는 누구나 내 API 키로 요청을 보낼 수 있습니다.
+```bash
+cd ai-office
+npx wrangler login                          # 브라우저에서 Cloudflare 로그인
+npx wrangler secret put ANTHROPIC_API_KEY   # API 키 붙여넣기
+npx wrangler secret put OFFICE_PASSWORD     # 사무실 비밀번호 정하기
+npm run deploy                              # https://homepaetion-ai-office.<계정>.workers.dev 로 배포
+```
 
-## 설정 (환경변수)
+이후 코드를 고치면 `npm run deploy`만 다시 실행하면 됩니다.
 
-| 이름 | 설명 |
-|---|---|
-| `ANTHROPIC_API_KEY` | 필수. Claude API 키 |
-| `OFFICE_PASSWORD` | 선택. 설정하면 비밀번호를 입력해야 AI 직원을 쓸 수 있음 |
-| `CLAUDE_MODEL` | 선택. 기본값 `claude-opus-5-5` |
+> ⚠️ `OFFICE_PASSWORD`는 꼭 설정하세요. 설정하지 않으면 주소를 아는 누구나 내 API 키로 요청을 보낼 수 있습니다.
+
+- **비용**: 무료 플랜(하루 10만 요청)으로 충분합니다. Claude API 사용료는 Anthropic에서 별도로 청구됩니다.
+- **내 도메인 연결**: Cloudflare 대시보드 → Workers & Pages → `homepaetion-ai-office` → Settings → Domains & Routes에서 `office.도메인.com` 같은 주소를 추가할 수 있습니다.
+- **GitHub 자동 배포**: 대시보드에서 이 저장소를 연결하고 Root directory를 `ai-office`로 지정하면, push할 때마다 자동 배포됩니다.
+
+## 설정
+
+| 이름 | 넣는 곳 | 설명 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | secret / `.dev.vars` | 필수. Claude API 키 |
+| `OFFICE_PASSWORD` | secret / `.dev.vars` | 선택. 설정하면 비밀번호를 입력해야 AI 직원을 쓸 수 있음 |
+| `CLAUDE_MODEL` | `wrangler.jsonc`의 `vars` | 사용할 모델. 기본값 `claude-opus-5-5` |
 
 ## 구조
 
 ```
 ai-office/
-├── server.js        # 로컬 실행 서버 (정적 파일 + API)
-├── api/             # Vercel 서버리스 함수 (agents, chat, delegate)
-├── lib/agents.js    # AI 직원 명부와 역할(시스템 프롬프트), 코토의 업무 배분 형식
-├── lib/chat.js      # Claude API 호출 (스트리밍 답변, 코토 업무 배분)
-└── public/          # 사무실 화면 (HTML/CSS/JS)
+├── wrangler.jsonc   # Cloudflare Workers 설정
+├── src/worker.js    # Worker 진입점 (/api/* 라우팅)
+├── src/api.js       # Claude API 호출 (스트리밍 답변, 코토 업무 배분)
+├── src/agents.js    # AI 직원 명부와 역할(시스템 프롬프트), 코토의 업무 배분 형식
+└── public/          # 사무실 화면 (HTML/CSS/JS) - Workers Assets로 제공
 ```

@@ -1,0 +1,6 @@
+# 로컬 실행(npm run dev)용 비밀값. 이 파일을 .dev.vars로 복사해서 채우세요.
+# Anthropic 콘솔(https://console.anthropic.com)에서 발급한 API 키
+ANTHROPIC_API_KEY=sk-ant-...
+
+# (선택) 설정하면 이 비밀번호를 입력한 사람만 AI 직원을 쓸 수 있어요.
+OFFICE_PASSWORD=
