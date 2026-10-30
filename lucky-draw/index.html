@@ -358,7 +358,8 @@
     const STEP = 1000 / 120;
     const NEON = '#2ef2ff', PINK = '#ff3d9a', GOLD = '#ffc23d', RED = '#ff2d55';
 
-    let M, engine, statics, movers, balls, alive, total, need, pitY, topY, gate;
+    const PIT_L = 320, PIT_R = 400;   // 탈락 구멍 좌우
+    let M, engine, statics, movers, flippers, balls, alive, total, need, pitY, topY, gate;
     let canvas, ctx, dpr, cw, ch, cam, zoom, speed, started, countdownEnd, ended, stopped;
     let simTime, acc, particles, toasts, shake, resolveRun, raf;
 
@@ -389,6 +390,38 @@
       b.move = (t) => M.Body.setPosition(b, { x: cx + amp * Math.sin((t / period) * Math.PI * 2 + phase), y }, true);
       movers.push(b);
     }
+    // 핀볼 플리퍼: 무작위 타이밍에 튀어 올라 구멍 앞의 공을 다시 위로 쳐올려요
+    function flipper(px, py, side) {
+      const len = 95;
+      const rest = side > 0 ? 0.5 : Math.PI - 0.5;
+      const up = side > 0 ? -0.45 : Math.PI + 0.45;
+      const b = add(M.Bodies.rectangle(px + (len / 2) * Math.cos(rest), py + (len / 2) * Math.sin(rest), len, 16, {
+        isStatic: true, angle: rest, restitution: 0.3, friction: 0.02, chamfer: { radius: 7 },
+      }), 'flip');
+      Object.assign(b, { pivot: { x: px, y: py }, cur: rest, rest, up, target: rest, holdUntil: 0, nextFlip: 0 });
+      flippers.push(b);
+    }
+
+    function moveFlippers() {
+      for (const f of flippers) {
+        if (simTime >= f.nextFlip) {
+          f.target = f.up;
+          f.holdUntil = simTime + 220;
+          f.nextFlip = simTime + 450 + random() * 1100;
+        } else if (f.target === f.up && simTime > f.holdUntil) {
+          f.target = f.rest;
+        }
+        const diff = f.target - f.cur;
+        const spd = f.target === f.up ? 0.09 : 0.035;
+        const d = Math.max(-spd, Math.min(spd, diff));
+        f.rising = f.target === f.up && Math.abs(diff) > 0.01;
+        if (d) {
+          M.Body.rotate(f, d, f.pivot, true);
+          f.cur += d;
+        }
+      }
+    }
+
     function chevrons(y0, rows) {
       for (let r = 0; r < rows; r++) {
         const off = r % 2 ? 50 : 0;
@@ -399,6 +432,7 @@
     function buildCourse() {
       statics = [];
       movers = [];
+      flippers = [];
       // 출발 대기실 + 출발 게이트
       seg(L, -4000, L, GATE_Y); seg(R, -4000, R, GATE_Y);
       gate = seg(L, GATE_Y, R, GATE_Y);
@@ -410,15 +444,14 @@
       seg(L, 680, L, 5100); seg(R, 680, R, 5100);
       // ② 빗살 장애물
       chevrons(740, 4);
-      // ③ 두 갈래 길 (왼쪽은 핀밭, 오른쪽은 지그재그)
+      // ③ 두 갈래 길 (왼쪽은 핀밭, 오른쪽은 회전 막대)
       seg(300, 1240, 360, 1180); seg(360, 1180, 420, 1240);
       seg(300, 1240, 300, 1860); seg(420, 1240, 420, 1860);
       seg(300, 1860, 360, 1920); seg(420, 1860, 360, 1920);
       for (let r = 0, y = 1290; y < 1840; r++, y += 60) {
         for (let x = 72 + (r % 2 ? 28 : 0); x < 290; x += 56) peg(x, y);
       }
-      seg(420, 1300, 620, 1360); seg(R, 1450, 480, 1510);
-      seg(420, 1600, 620, 1660); seg(R, 1750, 480, 1810);
+      spinner(550, 1340, 150, 0.05); spinner(550, 1550, 150, -0.055); spinner(550, 1760, 150, 0.06);
       // ④ 회전 막대 구간
       spinner(200, 2000, 220, 0.04); spinner(520, 2000, 220, -0.04);
       spinner(360, 2190, 240, 0.05); spinner(110, 2190, 120, -0.07); spinner(610, 2190, 120, 0.07);
@@ -427,6 +460,7 @@
       seg(L, 2480, 280, 2560); seg(R, 2480, 440, 2560);
       path([[280, 2560], [480, 2760], [80, 3010], [480, 3260], [280, 3360]]);
       path([[440, 2560], [640, 2760], [240, 3010], [640, 3260], [440, 3360]]);
+      peg(360, 2885); peg(360, 3135);
       seg(280, 3360, L, 3480); seg(440, 3360, R, 3480);
       // ⑥ 튕겨내는 범퍼 (핑볼)
       for (let r = 0; r < 4; r++) {
@@ -437,16 +471,17 @@
       slider(4080, 200, CX, 200, 2400, 0);
       slider(4230, 200, CX, 200, 2000, Math.PI);
       slider(4380, 200, CX, 200, 2800, Math.PI / 2);
-      // ⑧ 빗살 + 다이아몬드
+      // ⑧ 빗살
       chevrons(4480, 3);
-      for (let r = 0; r < 2; r++) {
-        for (let x = 120 + (r % 2 ? 60 : 0); x < R - 40; x += 120) diamond(x, 4800 + r * 100);
-      }
-      // ⑨ 마지막 깔때기 + 탈락 구멍
-      seg(L, 5000, 300, 5260); seg(R, 5000, 420, 5260);
-      spinner(CX, 5170, 150, 0.06);
-      seg(300, 5260, 300, 5420); seg(420, 5260, 420, 5420);
-      pitY = 5380;
+      // ⑨ 핀볼 존: 범퍼 + 양쪽 플리퍼가 구멍 앞에서 한 번 더 살려줄 기회!
+      kicker(200, 4800); kicker(520, 4800); kicker(360, 4900);
+      diamond(120, 4950); diamond(600, 4950);
+      seg(L, 5000, 250, 5250); seg(R, 5000, 470, 5250);
+      flipper(250, 5250, 1);
+      flipper(470, 5250, -1);
+      seg(250, 5250, PIT_L, 5330); seg(470, 5250, PIT_R, 5330);
+      seg(PIT_L, 5330, PIT_L, 5460); seg(PIT_R, 5330, PIT_R, 5460);
+      pitY = 5390;
     }
 
     function spawnBalls(entries) {
@@ -492,11 +527,19 @@
           const d = Math.hypot(dx, dy) || 1;
           M.Body.setVelocity(b, { x: (dx / d) * 11, y: (dy / d) * 11 });
         }
+        if (s.kind === 'flip' && s.rising && started && !ended) {
+          M.Body.setVelocity(b, { x: (CX - b.position.x) * 0.02 + (random() - 0.5) * 4, y: -9 - random() * 3 });
+          if (simTime - (b.savedAt || -1e9) > 1500) {
+            b.savedAt = simTime;
+            toasts.push({ text: `🛟 ${b.label} 기사회생!`, color: '#5dff9b', t: performance.now() });
+          }
+        }
       }
     }
 
     function step() {
       for (const m of movers) m.move(simTime);
+      if (started) moveFlippers();
       M.Engine.update(engine, STEP);
       simTime += STEP;
       for (const b of balls) {
@@ -617,7 +660,7 @@
         g.addColorStop(0, 'rgba(255,45,85,0)');
         g.addColorStop(1, `rgba(255,45,85,${0.7 * pulse})`);
         ctx.fillStyle = g;
-        ctx.fillRect(300, pitY - 40, 120, 80);
+        ctx.fillRect(PIT_L, pitY - 40, PIT_R - PIT_L, 80);
         ctx.fillStyle = RED;
         ctx.shadowColor = RED;
         ctx.shadowBlur = 20;
@@ -658,7 +701,7 @@
       for (const b of statics) {
         if (!visible(b) || b.kind === 'wall' || b.kind === 'gate') continue;
         const hit = b.flash !== undefined && simTime - b.flash < 160;
-        const color = hit ? '#fff' : b.kind === 'kick' ? PINK : NEON;
+        const color = hit ? '#fff' : b.kind === 'kick' ? PINK : b.kind === 'flip' ? GOLD : NEON;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = hit ? 25 : 10;
@@ -763,11 +806,11 @@
       ctx.stroke();
       for (const b of statics) {
         if (b.kind === 'wall' || b.kind === 'gate') continue;
-        ctx.fillStyle = b.kind === 'kick' ? PINK : NEON;
+        ctx.fillStyle = b.kind === 'kick' ? PINK : b.kind === 'flip' ? GOLD : NEON;
         ctx.fillRect(ox + b.position.x * s - 1, oy + b.position.y * s - 1, 2, 2);
       }
       ctx.fillStyle = RED;
-      ctx.fillRect(ox + 300 * s, oy + pitY * s - 2, 120 * s, 4);
+      ctx.fillRect(ox + PIT_L * s, oy + pitY * s - 2, (PIT_R - PIT_L) * s, 4);
       for (const b of balls) {
         if (b.out) continue;
         ctx.fillStyle = b.color;
@@ -878,7 +921,7 @@
       const dramatic = started && !ended && alive === need + 1;
       let rate = started ? speed : 1;
       // 마지막 한 명이 탈락하기 직전엔 슬로모션
-      if (dramatic && lead && pitY - lead.position.y < 320) rate = Math.min(rate, 0.35);
+      if (dramatic && lead && pitY - lead.position.y < 200) rate = Math.min(rate, 0.35);
       acc += 2 * rate;
       while (acc >= 1) { step(); acc -= 1; }
       lead = leader();
@@ -915,6 +958,7 @@
       engine = M.Engine.create({ positionIterations: 8, velocityIterations: 6 });
       M.Composite.add(engine.world, [...statics, ...balls]);
       M.Events.on(engine, 'collisionStart', onCollision);
+      M.Events.on(engine, 'collisionActive', onCollision);
 
       canvas = $('raceCanvas');
       ctx = canvas.getContext('2d');
