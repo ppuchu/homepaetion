@@ -289,7 +289,7 @@ function sprite(look, dir, frame, pose) {
 }
 
 // ---------- 사무실 ----------
-export function createOffice({ canvas, overlay, agents, onSelect, onMeeting, onFloorChange }) {
+export function createOffice({ canvas, overlay, agents, onSelect, onMeeting, onFloorChange, onLounge }) {
   const ctx = canvas.getContext("2d");
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const key = (x, y) => `${x},${y}`;
@@ -1020,7 +1020,12 @@ export function createOffice({ canvas, overlay, agents, onSelect, onMeeting, onF
     person.spot = spot;
     person.task = "wandering";
     person.stayLeft = 5 + Math.random() * 7;
-    travel(person, spot);
+    travel(person, spot).then((arrived) => {
+      if (!arrived || person.task !== "wandering") return;
+      // 휴게실에서 다른 직원과 마주치면 알린다 (사내 메신저 잡담용)
+      const mates = [...people.values()].filter((p) => p !== person && p.floor === person.floor && p.task === "wandering" && p.spot && !p.path.length);
+      onLounge?.(person.id, mates.map((p) => p.id));
+    });
   }
 
   function update(person, dt) {

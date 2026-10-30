@@ -19,6 +19,7 @@
     </div>
     <div class="top-actions">
       <span id="status" class="status">연결 확인 중…</span>
+      <button id="messengerBtn" class="btn">💬 메신저 <span id="msgBadge" class="msg-badge" hidden></span></button>
       <button id="meetingBtn" class="btn primary">👥 회의 소집</button>
     </div>
   </header>
@@ -35,10 +36,7 @@
       <div class="roster" id="roster" aria-label="직원 목록"></div>
     </section>
 
-    <aside class="log">
-      <h2>📒 오늘의 업무 일지</h2>
-      <ul id="logList" class="log-list"><li class="empty">아직 맡긴 업무가 없어요.</li></ul>
-    </aside>
+    <section class="messenger" id="messenger" aria-label="사내 메신저"></section>
   </main>
 
   <!-- 직원과 1:1 대화 -->

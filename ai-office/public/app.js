@@ -1,13 +1,15 @@
 import { createOffice } from "./office.js";
+import { escapeHtml, renderMarkdown } from "./markdown.js";
+import { createMessenger } from "./messenger.js";
 
 const HISTORY_KEY = "aiOffice.history";
-const LOG_KEY = "aiOffice.log";
 const PASSWORD_KEY = "aiOffice.password";
 
 const $ = (sel) => document.querySelector(sel);
 
 let agents = [];
 let office = null; // 픽셀아트 사무실
+let messenger = null; // 사내 메신저
 let current = null; // 대화 중인 직원
 let passwordRequired = false;
 const busy = new Set(); // 지금 일하고 있는 직원 id
@@ -26,75 +28,6 @@ function save(key, value) {
   } catch {}
 }
 const histories = load(HISTORY_KEY, {});
-const today = new Date().toLocaleDateString("ko-KR");
-let workLog = load(LOG_KEY, []).filter((entry) => entry.date === today);
-
-// ---------- 간단한 마크다운 렌더러 (HTML은 모두 이스케이프) ----------
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-}
-function inline(s) {
-  return escapeHtml(s)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
-}
-function renderMarkdown(src) {
-  const lines = src.replace(/\r/g, "").split("\n");
-  const out = [];
-  let i = 0;
-  const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
-  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (/^```/.test(line)) {
-      const buf = [];
-      i++;
-      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
-      i++;
-      out.push(`<pre><code>${escapeHtml(buf.join("\n"))}</code></pre>`);
-    } else if (/^#{1,4}\s/.test(line)) {
-      const level = line.match(/^#+/)[0].length;
-      out.push(`<h${level}>${inline(line.replace(/^#+\s/, ""))}</h${level}>`);
-      i++;
-    } else if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-      out.push("<hr>");
-      i++;
-    } else if (isTableRow(line) && isTableRow(lines[i + 1] || "") && /^[\s|:-]+$/.test(lines[i + 1])) {
-      const head = cells(line);
-      i += 2;
-      const rows = [];
-      while (i < lines.length && isTableRow(lines[i])) rows.push(cells(lines[i++]));
-      out.push(
-        `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>` +
-          rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("") +
-          "</tbody></table>",
-      );
-    } else if (/^\s*([-*]|\d+\.)\s/.test(line)) {
-      const ordered = /^\s*\d+\./.test(line);
-      const items = [];
-      while (i < lines.length && /^\s*([-*]|\d+\.)\s/.test(lines[i])) {
-        items.push(`<li>${inline(lines[i].replace(/^\s*([-*]|\d+\.)\s/, ""))}</li>`);
-        i++;
-      }
-      out.push(ordered ? `<ol>${items.join("")}</ol>` : `<ul>${items.join("")}</ul>`);
-    } else if (/^>\s?/.test(line)) {
-      const buf = [];
-      while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(inline(lines[i++].replace(/^>\s?/, "")));
-      out.push(`<blockquote>${buf.join("<br>")}</blockquote>`);
-    } else if (!line.trim()) {
-      i++;
-    } else {
-      const buf = [];
-      while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|>|\s*([-*]|\d+\.)\s)/.test(lines[i]) && !isTableRow(lines[i])) {
-        buf.push(inline(lines[i++]));
-      }
-      out.push(`<p>${buf.join("<br>")}</p>`);
-    }
-  }
-  return out.join("");
-}
 
 // ---------- API ----------
 async function post(url, payload) {
@@ -219,37 +152,28 @@ function setDeskState(agentId, state, label) {
   staff.querySelector(".state").textContent = label || STATE_LABEL[state];
 }
 
-// ---------- 업무 일지 ----------
-function addLog(agent, task) {
-  workLog.unshift({
-    date: today,
-    time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
-    agentId: agent.id,
-    text: `${agent.emoji} ${agent.name} · ${task.slice(0, 40)}${task.length > 40 ? "…" : ""}`,
-  });
-  workLog = workLog.slice(0, 50);
-  save(LOG_KEY, workLog);
-  renderLog();
+// ---------- 메신저용 보고·질문 줄 ----------
+// 직원 답변 끝의 "보고: …", "질문: …" 줄은 메신저로 옮기고 결과물에서는 뺀다.
+const META_LINE = /^[ \t>*-]*\**\s*(보고|질문)\s*\**\s*[:：]\s*(.+?)\s*$/gm;
+function parseReply(raw) {
+  const reports = [];
+  const questions = [];
+  const text = raw
+    .replace(META_LINE, (_, kind, body) => {
+      const clean = body.replace(/\*\*/g, "").trim();
+      if (kind === "보고") reports.push(clean);
+      else if (!/^(없음|없습니다)\.?$/.test(clean)) questions.push(clean);
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, report: reports.join(" "), questions };
 }
-function renderLog() {
-  const list = $("#logList");
-  list.innerHTML = "";
-  if (!workLog.length) {
-    list.innerHTML = `<li class="empty">아직 맡긴 업무가 없어요.</li>`;
-    return;
-  }
-  for (const entry of workLog) {
-    const li = document.createElement("li");
-    li.innerHTML = `<span class="time">${entry.time}</span>${escapeHtml(entry.text)}`;
-    li.addEventListener("click", () => {
-      const agent = agents.find((a) => a.id === entry.agentId);
-      if (agent) openDrawer(agent);
-    });
-    list.append(li);
-  }
-}
+const display = (raw) => parseReply(raw).text;
+const agentById = (id) => agents.find((a) => a.id === id);
+const chiefAgent = () => agents.find((a) => a.chief);
 
-// ---------- 메시지 말풍선 ----------
+// ---------- 메시지 말풍선 (1:1 대화창) ----------
 function bubble(container, role, text, speaker) {
   const el = document.createElement("div");
   el.className = `msg ${role}`;
@@ -306,6 +230,7 @@ function openDrawer(agent) {
 }
 
 function renderMessages() {
+  if (!current) return;
   const box = $("#messages");
   box.innerHTML = "";
   const history = histories[current.id] || [];
@@ -315,14 +240,15 @@ function renderMessages() {
   }
   for (const m of history) {
     for (const part of m.parts || []) bubble(box, "assistant", part.text, part.speaker);
-    bubble(box, m.role, m.content, m.parts ? `${current.emoji} ${current.title} ${current.name} · 보고` : undefined);
+    const text = m.role === "assistant" ? display(m.content) : m.content;
+    bubble(box, m.role, text, m.parts ? `${current.emoji} ${current.title} ${current.name} · 보고` : undefined);
   }
 }
 
 function updateComposer() {
-  const working = current && busy.has(current.id);
-  $("#sendBtn").disabled = working;
-  $("#sendBtn").textContent = working ? "작업 중…" : "맡기기";
+  const isBusy = current && busy.has(current.id);
+  $("#sendBtn").disabled = isBusy;
+  $("#sendBtn").textContent = isBusy ? "작업 중…" : "맡기기";
 }
 
 function closeDrawer() {
@@ -331,70 +257,143 @@ function closeDrawer() {
   current = null;
 }
 
-async function sendTask(text) {
-  const agent = current;
-  if (!agent || busy.has(agent.id) || !text.trim() || !ensurePassword()) return;
-  if (agent.chief) return delegateTask(agent, text);
+// ---------- 직원에게 일 시키기 ----------
+// 같은 직원의 일은 차례대로 처리한다(대화 기록 순서가 섞이지 않게).
+// 대화창이 열려 있으면 답변을 실시간으로 보여 준다.
+const queues = new Map();
+function work(agent, text, { label, onPartial } = {}) {
+  const run = async () => {
+    const history = (histories[agent.id] ||= []);
+    history.push({ role: "user", content: text });
+    // 너무 길어지면 오래된 대화부터 잘라낸다 (user로 시작하도록 2개씩)
+    while (history.length > 30) history.splice(0, 2);
+    save(HISTORY_KEY, histories);
+    busy.add(agent.id);
+    setDeskState(agent.id, "working", label);
+    updateComposer();
 
-  const history = (histories[agent.id] ||= []);
-  history.push({ role: "user", content: text });
-  // 너무 길어지면 오래된 대화부터 잘라낸다 (user로 시작하도록 2개씩)
-  while (history.length > 30) history.splice(0, 2);
-  save(HISTORY_KEY, histories);
-
-  if (current === agent) renderMessages();
-  busy.add(agent.id);
-  setDeskState(agent.id, "working");
-  updateComposer();
-  addLog(agent, text);
-
-  const box = $("#messages");
-  let el = current === agent ? bubble(box, "assistant", "") : null;
-  el?.classList.add("typing");
-
-  try {
-    const reply = await streamChat(agent.id, history, (partial) => {
+    let el = null;
+    const showLive = (partial) => {
       if (current !== agent) return;
-      if (!el || !el.isConnected) {
+      if (!el?.isConnected) {
+        renderMessages();
         el = bubble($("#messages"), "assistant", "");
         el.classList.add("typing");
       }
-      setBubbleText(el, partial);
-      box.scrollTop = box.scrollHeight;
-    });
-    history.push({ role: "assistant", content: reply });
-    save(HISTORY_KEY, histories);
-    setDeskState(agent.id, "done");
+      setBubbleText(el, display(partial));
+      $("#messages").scrollTop = $("#messages").scrollHeight;
+    };
+    showLive("");
+    try {
+      const reply = await streamChat(agent.id, history, (partial) => {
+        showLive(partial);
+        onPartial?.(partial);
+      });
+      history.push({ role: "assistant", content: reply });
+      save(HISTORY_KEY, histories);
+      setDeskState(agent.id, "done");
+      return parseReply(reply);
+    } catch (err) {
+      history.pop();
+      save(HISTORY_KEY, histories);
+      setDeskState(agent.id, "idle");
+      if (current === agent) renderMessages();
+      throw err;
+    } finally {
+      el?.classList.remove("typing");
+      busy.delete(agent.id);
+      updateComposer();
+    }
+  };
+  const next = (queues.get(agent.id) || Promise.resolve()).catch(() => {}).then(run);
+  queues.set(agent.id, next);
+  return next;
+}
+
+// 직원의 결과를 메신저에 올린다: 완료 보고, 그리고 확인이 필요한 질문
+function postResult(agent, { text, report, questions }, ch = "work") {
+  if (report) {
+    messenger.post({ ch, from: agent.id, kind: "report", text: report, link: agent.id });
+  } else {
+    const short = text.length > 500;
+    messenger.post({ ch, from: agent.id, text: short ? `${text.slice(0, 500)}…` : text, link: short ? agent.id : undefined });
+  }
+  for (const q of questions) messenger.post({ ch, from: agent.id, kind: "question", text: q, agentId: agent.id });
+  if (questions.length && !agent.chief) {
+    messenger.post({ ch, from: chiefAgent().id, text: `대표님, ${agent.name}님이 확인을 요청했어요. 질문 아래 '답장하기'로 답해 주시면 바로 전달할게요.` });
+  }
+}
+
+function postError(agent, err, ch = "work") {
+  messenger.post({ ch, from: agent.id, text: `⚠️ 작업 중 문제가 생겼어요: ${err.message}` });
+}
+
+const ACKS = ["네, 바로 착수할게요!", "확인했습니다. 시작할게요.", "받았습니다! 금방 드릴게요.", "넵, 진행하겠습니다 🙌"];
+const pickAck = () => ACKS[Math.floor(Math.random() * ACKS.length)];
+
+// 1:1 대화창에서 보내기
+async function sendTask(text) {
+  const agent = current;
+  if (!agent || busy.has(agent.id) || !text.trim() || !ensurePassword()) return;
+  if (agent.chief) return delegateTask(text, { fromDrawer: true });
+
+  messenger.post({ from: "ceo", text: `@${agent.name} ${clip(text, 300)}`, quiet: true });
+  try {
+    postResult(agent, await work(agent, text));
   } catch (err) {
-    history.pop(); // 실패한 요청은 기록에서 뺀다
-    save(HISTORY_KEY, histories);
-    setDeskState(agent.id, "idle");
     if (current === agent) {
-      el?.remove();
       bubble($("#messages"), "error", `⚠️ ${err.message}`);
       $("#input").value ||= text;
-    } else {
-      alert(`${agent.name}: ${err.message}`);
     }
-  } finally {
-    el?.classList.remove("typing");
-    busy.delete(agent.id);
-    updateComposer();
+    postError(agent, err);
+  }
+}
+
+// 메신저에서 보내기: 코토에게 보내면 업무 배분, 직원에게 보내면 그 직원이 답한다
+async function sendFromMessenger(agentId, text, channel) {
+  const agent = agentById(agentId);
+  const ch = channel === "log" ? "work" : channel;
+  messenger.post({ ch, from: "ceo", text: `@${agent.name} ${text}` });
+  if (!ensurePassword()) return;
+  if (agent.chief) return delegateTask(text);
+  try {
+    postResult(agent, await work(agent, `[사내 메신저 #${ch === "lounge" ? "라운지" : ch === "meeting" ? "회의" : "업무"}] 대표님: ${text}`), ch);
+  } catch (err) {
+    postError(agent, err, ch);
+  }
+}
+
+// 직원의 질문에 대표님이 답하면, 그 답을 반영해 이어서 작업한다
+async function answerQuestion(agentId, question, answer) {
+  const agent = agentById(agentId);
+  messenger.post({ from: "ceo", kind: "answer", text: `@${agent.name} ${answer}` });
+  if (!ensurePassword()) return;
+  messenger.post({ from: agent.id, kind: "ack", text: "답변 감사합니다! 반영해서 이어서 할게요.", quiet: true });
+  try {
+    postResult(agent, await work(agent, `[대표님 답변]\n질문: ${question}\n답변: ${answer}\n\n이 답을 반영해서 이어서 진행해 주세요.`, { label: "답변 반영 중…" }));
+  } catch (err) {
+    postError(agent, err);
   }
 }
 
 // ---------- 비서실장 코토의 업무 배분 ----------
-async function delegateTask(chief, text) {
+async function delegateTask(text, { fromDrawer } = {}) {
+  const chief = chiefAgent();
+  if (busy.has(chief.id)) {
+    messenger.post({ from: chief.id, text: "지금 다른 업무를 배분하고 있어요. 끝나면 다시 말씀해 주세요!" });
+    return;
+  }
+  if (fromDrawer) messenger.post({ from: "ceo", text: `@${chief.name} ${clip(text, 300)}`, quiet: true });
+
   const history = (histories[chief.id] ||= []);
   history.push({ role: "user", content: text });
   while (history.length > 30) history.splice(0, 2);
   save(HISTORY_KEY, histories);
 
-  renderMessages();
+  if (current === chief) renderMessages();
   busy.add(chief.id);
   setDeskState(chief.id, "working", "업무 배분 중…");
   updateComposer();
-  addLog(chief, text);
 
   const box = () => $("#messages");
   const show = (role, text, speaker) => (current === chief ? bubble(box(), role, text, speaker) : null);
@@ -402,15 +401,16 @@ async function delegateTask(chief, text) {
   const parts = [];
 
   try {
-    let el = show("assistant", "업무를 검토하고 있어요…", chiefName);
+    const el = show("assistant", "업무를 검토하고 있어요…", chiefName);
     el?.classList.add("typing");
     const plan = await (await post("/api/delegate", { messages: toApi(history) })).json();
     el?.remove();
 
-    // 직원이 필요 없는 일은 코토가 바로 답한다
+    // 부서가 필요 없는 일은 코토가 바로 답한다
     if (!plan.assignments.length) {
       const reply = plan.direct_reply || plan.plan;
       show("assistant", reply);
+      messenger.post({ from: chief.id, text: reply });
       history.push({ role: "assistant", content: reply });
       save(HISTORY_KEY, histories);
       setDeskState(chief.id, "done");
@@ -421,50 +421,52 @@ async function delegateTask(chief, text) {
       `**📋 업무 배분**\n\n${plan.plan}\n\n` +
       plan.assignments
         .map((a, i) => {
-          const staff = agents.find((x) => x.id === a.agentId);
+          const staff = agentById(a.agentId);
           return `${i + 1}. **${staff.emoji} ${staff.name}** (${staff.title}): ${a.task}`;
         })
         .join("\n");
     parts.push({ speaker: chiefName, text: planText });
     show("assistant", planText, chiefName);
+    messenger.post({ from: chief.id, text: `📋 ${plan.plan}` });
+    for (const a of plan.assignments) {
+      const staff = agentById(a.agentId);
+      messenger.post({ from: chief.id, kind: "assign", text: `@${staff.name} ${a.task}`, agentId: staff.id });
+    }
     // 코토가 담당자 자리로 걸어가 업무를 전달한다 (응답을 기다리지 않고 함께 진행)
     office.deliver(chief.id, plan.assignments.map((a) => a.agentId));
     setDeskState(chief.id, "working", "직원들 작업 관리 중…");
 
     const results = [];
     for (const a of plan.assignments) {
-      const staff = agents.find((x) => x.id === a.agentId);
+      const staff = agentById(a.agentId);
       const speaker = `${staff.emoji} ${staff.title} ${staff.name}`;
+      const prev = results.at(-1);
+      messenger.post({ from: staff.id, kind: "ack", text: prev ? `${pickAck()} @${prev.name}님 결과 받아서 이어갈게요.` : pickAck() });
       const prompt =
         `[비서실장 코토 전달 업무]\n${a.task}\n\n` +
-        `대표 원래 지시: ${clip(text, 2000)}` +
-        (results.length
-          ? `\n\n참고할 동료 결과물:\n${results.map((r) => `### ${r.speaker}\n${clip(r.text, 3000)}`).join("\n\n")}`
-          : "");
+        `대표님 원래 지시: ${clip(text, 2000)}` +
+        (results.length ? `\n\n참고할 동료 결과물:\n${results.map((r) => `### ${r.speaker}\n${clip(r.text, 3000)}`).join("\n\n")}` : "");
 
-      setDeskState(staff.id, "working", "코토 지시로 작업 중…");
       let staffEl = show("assistant", "", speaker);
       staffEl?.classList.add("typing");
       try {
-        const reply = await streamChat(staff.id, [{ role: "user", content: prompt }], (partial) => {
-          if (current !== chief) return;
-          if (!staffEl?.isConnected) staffEl = bubble(box(), "assistant", "", speaker);
-          setBubbleText(staffEl, partial);
-          box().scrollTop = box().scrollHeight;
+        const result = await work(staff, prompt, {
+          label: "코토 지시로 작업 중…",
+          onPartial: (partial) => {
+            if (current !== chief) return;
+            if (!staffEl?.isConnected) staffEl = bubble(box(), "assistant", "", speaker);
+            setBubbleText(staffEl, display(partial));
+            box().scrollTop = box().scrollHeight;
+          },
         });
-        results.push({ speaker, text: reply });
-        parts.push({ speaker, text: reply });
-        // 직원 개인 대화방에도 남겨서 나중에 이어서 수정 요청할 수 있게 한다
-        if (!busy.has(staff.id)) {
-          (histories[staff.id] ||= []).push({ role: "user", content: prompt }, { role: "assistant", content: reply });
-          while (histories[staff.id].length > 30) histories[staff.id].splice(0, 2);
-        }
-        setDeskState(staff.id, "done");
+        results.push({ speaker, name: staff.name, text: result.text });
+        parts.push({ speaker, text: result.text });
+        postResult(staff, result);
       } catch (err) {
         const failed = `⚠️ ${err.message}`;
         if (staffEl) setBubbleText(staffEl, failed);
         parts.push({ speaker, text: failed });
-        setDeskState(staff.id, "idle");
+        postError(staff, err);
       }
       staffEl?.classList.remove("typing");
     }
@@ -475,19 +477,22 @@ async function delegateTask(chief, text) {
     let reportEl = show("assistant", "", `${chiefName} · 보고`);
     reportEl?.classList.add("typing");
     const reportPrompt =
-      `대표 지시: ${clip(text, 2000)}\n\n직원 결과물:\n` +
+      `대표님 지시: ${clip(text, 2000)}\n\n직원 결과물:\n` +
       results.map((r) => `### ${r.speaker}\n${clip(r.text, 4000)}`).join("\n\n") +
-      `\n\n위 결과물을 바탕으로 대표에게 보고해 주세요. 결과물 전문은 대표가 위에서 볼 수 있으니 반복하지 말고 요약과 결정할 일 위주로 써 주세요.`;
+      `\n\n위 결과물을 바탕으로 대표님께 보고해 주세요. 결과물 전문은 대표님이 위에서 볼 수 있으니 반복하지 말고 요약과 결정할 일 위주로 써 주세요.`;
     const report = await streamChat(chief.id, [{ role: "user", content: reportPrompt }], (partial) => {
       if (current !== chief) return;
       if (!reportEl?.isConnected) reportEl = bubble(box(), "assistant", "", `${chiefName} · 보고`);
-      setBubbleText(reportEl, partial);
+      setBubbleText(reportEl, display(partial));
       box().scrollTop = box().scrollHeight;
     });
     reportEl?.classList.remove("typing");
 
+    const parsed = parseReply(report);
     history.push({ role: "assistant", content: report, parts });
     save(HISTORY_KEY, histories);
+    messenger.post({ from: chief.id, kind: "report", text: `대표님, 보고드립니다. ${parsed.report || clip(parsed.text.replace(/\s+/g, " "), 200)}`, link: chief.id });
+    for (const q of parsed.questions) messenger.post({ from: chief.id, kind: "question", text: q, agentId: chief.id });
     setDeskState(chief.id, "done", "보고 완료");
   } catch (err) {
     if (parts.length) {
@@ -499,16 +504,76 @@ async function delegateTask(chief, text) {
     }
     save(HISTORY_KEY, histories);
     setDeskState(chief.id, "idle");
+    postError(chief, err);
     if (current === chief) {
       renderMessages();
       if (!parts.length) bubble(box(), "error", `⚠️ ${err.message}`);
-    } else {
-      alert(`${chief.name}: ${err.message}`);
     }
   } finally {
     busy.delete(chief.id);
     updateComposer();
   }
+}
+
+// ---------- 업무일지 ----------
+// 오늘 메신저 기록(#업무, #회의)을 코토가 업무일지로 정리해 #업무일지에 올린다
+async function writeDailyLog() {
+  const chief = chiefAgent();
+  if (busy.has(chief.id)) {
+    messenger.post({ ch: "log", from: chief.id, text: "지금 다른 일을 하고 있어요. 끝나면 다시 눌러 주세요!" });
+    return;
+  }
+  const items = messenger.today().filter((m) => m.kind !== "log");
+  if (!items.length) {
+    messenger.post({ ch: "log", from: chief.id, text: "오늘은 아직 기록된 업무가 없어요." });
+    return;
+  }
+  if (!ensurePassword()) return;
+  const date = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
+  const lines = items
+    .map((m) => `[${new Date(m.time).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}] #${m.ch === "meeting" ? "회의" : "업무"} ${m.who}${m.kind && m.kind !== "talk" ? ` (${m.kind})` : ""}: ${m.text.replace(/\s+/g, " ")}`)
+    .join("\n");
+  const prompt =
+    `아래는 오늘(${date}) 사내 메신저 기록입니다. 대표님께 드릴 오늘의 업무일지를 써 주세요.\n` +
+    `형식: # ${date} 업무일지 → ## 한눈에 보기(3줄) → ## 부서별 완료한 일 → ## 진행 중·대기 → ## 대표님 확인 필요(답하지 않은 질문 포함) → ## 내일 할 일\n` +
+    `기록에 없는 일은 지어내지 마세요.\n\n${lines}`;
+
+  const id = messenger.post({ ch: "log", from: chief.id, kind: "log", text: "업무일지를 쓰고 있어요…", quiet: true });
+  busy.add(chief.id);
+  setDeskState(chief.id, "working", "업무일지 작성 중…");
+  updateComposer();
+  try {
+    const raw = await streamChat(chief.id, [{ role: "user", content: clip(prompt, 18000) }], (partial) => messenger.update(id, { text: display(partial) }));
+    messenger.update(id, { text: display(raw) });
+    setDeskState(chief.id, "done", "업무일지 작성 완료");
+  } catch (err) {
+    messenger.update(id, { text: `⚠️ 업무일지 작성 실패: ${err.message}` });
+    setDeskState(chief.id, "idle");
+  } finally {
+    busy.delete(chief.id);
+    updateComposer();
+  }
+}
+
+// ---------- 휴게실 잡담 (미리 써 둔 대사, API를 쓰지 않음) ----------
+const SMALL_TALK = [
+  ["커피 한 잔 하실래요? ☕", "좋아요! 저는 라떼로요"],
+  ["오늘 일 많네요 😮‍💨", "그러게요, 힘내요 우리 💪"],
+  ["점심 뭐 드셨어요?", "김밥이요 ㅎㅎ 금방 먹고 왔어요"],
+  ["아까 올린 결과물 좋던데요!", "앗 고마워요 😊"],
+  ["잠깐 바람 쐬러 왔어요", "저도요~ 머리 좀 식히려고요"],
+  ["대표님 오늘 기분 좋아 보이시던데요", "그럼 보고 잘 드려야겠네요 ㅎㅎ"],
+  ["이번 주 마감 몇 개 남으셨어요?", "두 개요! 거의 다 왔어요"],
+  ["간식 새로 들어왔대요 🍪", "오 진짜요? 이따 가볼게요"],
+];
+let lastChat = 0;
+function loungeChat(id, mates) {
+  if (!mates.length || Date.now() - lastChat < 45000) return;
+  lastChat = Date.now();
+  const [a, b] = SMALL_TALK[Math.floor(Math.random() * SMALL_TALK.length)];
+  const mate = mates[Math.floor(Math.random() * mates.length)];
+  messenger.post({ ch: "lounge", from: id, text: a, quiet: true });
+  setTimeout(() => messenger.post({ ch: "lounge", from: mate, text: b, quiet: true }), 2500);
 }
 
 // ---------- 회의실 ----------
@@ -549,7 +614,7 @@ async function runMeeting(topic) {
   const ids = [...document.querySelectorAll("#attendees input:checked")]
     .sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order))
     .map((i) => i.value);
-  const attendees = ids.map((id) => agents.find((a) => a.id === id));
+  const attendees = ids.map((id) => agentById(id));
   if (!topic.trim()) return alert("회의 안건을 적어 주세요.");
   if (!attendees.length) return alert("참석할 직원을 골라 주세요.");
   if (!ensurePassword()) return;
@@ -558,24 +623,29 @@ async function runMeeting(topic) {
   minutes.innerHTML = "";
   bubble(minutes, "user", `안건: ${topic}`);
   $("#meetingStart").disabled = true;
+  messenger.post({ ch: "meeting", from: "ceo", text: `회의 소집: **${topic}**\n참석: ${attendees.map((a) => a.name).join(", ")}` });
 
   office.setFloor(office.gather(attendees.map((a) => a.id)));
   const said = [];
   for (const agent of attendees) {
     const prompt =
-      `[팀 회의] 대표가 낸 안건:\n${topic}\n\n` +
+      `[팀 회의] 대표님이 낸 안건:\n${topic}\n\n` +
       (said.length ? `앞서 나온 동료 의견:\n${said.map((s) => `- ${s.who}: ${s.text}`).join("\n\n")}\n\n` : "") +
       `당신(${agent.title} ${agent.name})의 전문 분야 관점에서 핵심 의견과 바로 할 일을 짧게(10줄 안팎) 말해 주세요. 앞사람과 겹치는 내용은 반복하지 마세요.`;
 
-    setDeskState(agent.id, "working");
+    setDeskState(agent.id, "working", "회의 중…");
     const el = bubble(minutes, "assistant", "", `${agent.emoji} ${agent.title} ${agent.name}`);
     el.classList.add("typing");
     try {
-      const reply = await streamChat(agent.id, [{ role: "user", content: prompt }], (partial) => {
-        setBubbleText(el, partial);
-        minutes.scrollTop = minutes.scrollHeight;
-      });
+      const reply = display(
+        await streamChat(agent.id, [{ role: "user", content: prompt }], (partial) => {
+          setBubbleText(el, display(partial));
+          minutes.scrollTop = minutes.scrollHeight;
+        }),
+      );
+      setBubbleText(el, reply);
       said.push({ who: `${agent.title} ${agent.name}`, text: reply });
+      messenger.post({ ch: "meeting", from: agent.id, text: reply.length > 400 ? `${reply.slice(0, 400)}…` : reply, quiet: true });
       setDeskState(agent.id, "done");
     } catch (err) {
       setBubbleText(el, `⚠️ ${err.message}`);
@@ -584,7 +654,7 @@ async function runMeeting(topic) {
     el.classList.remove("typing");
   }
   office.disperse(attendees.map((a) => a.id));
-  addLog({ id: attendees[0].id, emoji: "👥", name: "회의" }, topic);
+  messenger.post({ ch: "meeting", from: chiefAgent().id, text: `회의를 마쳤어요. 발언 ${said.length}건이 기록됐어요.` });
   $("#meetingStart").disabled = false;
 }
 
@@ -607,14 +677,30 @@ async function init() {
     canvas: $("#office"),
     overlay: $("#overlay"),
     agents,
-    onSelect: (id) => openDrawer(agents.find((a) => a.id === id)),
+    onSelect: (id) => openDrawer(agentById(id)),
     onMeeting: openMeeting,
     onFloorChange: (id) => updateFloorTabs(id),
+    onLounge: loungeChat,
+  });
+  messenger = createMessenger({
+    root: $("#messenger"),
+    agents,
+    avatar: (id) => office.avatar(id, 2),
+    onOpenAgent: (id) => openDrawer(agentById(id)),
+    onSend: sendFromMessenger,
+    onAnswer: answerQuestion,
+    onWriteLog: writeDailyLog,
   });
   renderFloorTabs();
   updateFloorTabs("hq");
   renderRoster();
-  renderLog();
+
+  document.addEventListener("messenger:unread", (e) => {
+    const badge = $("#msgBadge");
+    badge.hidden = !e.detail;
+    badge.textContent = e.detail;
+  });
+  $("#messengerBtn").addEventListener("click", () => messenger.focus());
 
   $("#closeBtn").addEventListener("click", closeDrawer);
   $("#clearBtn").addEventListener("click", () => {
