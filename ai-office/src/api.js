@@ -1,11 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { DELEGATE_SCHEMA, DELEGATE_SYSTEM, findAgent, publicAgents } from "./agents.js";
 
-const DEFAULT_MODEL = "claude-opus-5-5";
+// 코토(업무 배분·보고)는 Opus, 부서 직원은 Sonnet. wrangler.jsonc의 vars로 바꿀 수 있다.
+const DEFAULT_CHIEF_MODEL = "claude-opus-5-5";
+const DEFAULT_STAFF_MODEL = "claude-sonnet-5-5";
 const MAX_MESSAGES = 40;
 const MAX_CHARS = 20000;
 
-const modelOf = (env) => env.CLAUDE_MODEL || DEFAULT_MODEL;
+const chiefModel = (env) => env.CHIEF_MODEL || DEFAULT_CHIEF_MODEL;
+const staffModel = (env) => env.STAFF_MODEL || DEFAULT_STAFF_MODEL;
+const modelOf = (env, agent) => (agent?.chief ? chiefModel(env) : staffModel(env));
 
 function json(status, data) {
   return new Response(JSON.stringify(data), {
@@ -63,7 +67,7 @@ function errorMessage(err) {
 export function handleAgents(request, env) {
   return json(200, {
     agents: publicAgents(),
-    model: modelOf(env),
+    model: `코토 ${chiefModel(env).replace("claude-", "")} · 직원 ${staffModel(env).replace("claude-", "")}`,
     ready: Boolean(env.ANTHROPIC_API_KEY),
     passwordRequired: Boolean(env.OFFICE_PASSWORD),
   });
@@ -76,7 +80,7 @@ export async function handleDelegate(request, env) {
 
   try {
     const response = await clientFor(env).beta.messages.create({
-      model: modelOf(env),
+      model: chiefModel(env),
       max_tokens: 16000,
       output_config: { effort: "medium", format: { type: "json_schema", schema: DELEGATE_SCHEMA } },
       system: DELEGATE_SYSTEM,
@@ -107,7 +111,7 @@ export async function handleChat(request, env) {
   if (!agent) return json(400, { error: "존재하지 않는 직원입니다." });
 
   const stream = clientFor(env).beta.messages.stream({
-    model: modelOf(env),
+    model: modelOf(env, agent),
     max_tokens: 64000,
     output_config: { effort: "medium" },
     system: [{ type: "text", text: agent.system, cache_control: { type: "ephemeral" } }],

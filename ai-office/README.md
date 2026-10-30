@@ -120,7 +120,8 @@ npm run deploy                              # https://homepaetion-ai-office.<계
 |---|---|---|
 | `ANTHROPIC_API_KEY` | secret / `.dev.vars` | 필수. Claude API 키 |
 | `OFFICE_PASSWORD` | secret / `.dev.vars` | 선택. 설정하면 비밀번호를 입력해야 AI 직원을 쓸 수 있음 |
-| `CLAUDE_MODEL` | `wrangler.jsonc`의 `vars` | 사용할 모델. 기본값 `claude-opus-5-5` |
+| `CHIEF_MODEL` | `wrangler.jsonc`의 `vars` | 코토(업무 배분·보고)의 모델. 기본값 `claude-opus-5-5` |
+| `STAFF_MODEL` | `wrangler.jsonc`의 `vars` | 부서 직원의 모델. 기본값 `claude-sonnet-5-5` |
 
 ## 구조
 

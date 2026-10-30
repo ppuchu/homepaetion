@@ -14,6 +14,10 @@ const ERRORS = {
   session_expired: "claude.ai에 다시 로그인해 주세요.",
   invalid_json: "업무 배분 결과를 읽지 못했어요. 다시 시도해 주세요.",
 };
+// 코토는 Opus, 부서 직원은 Sonnet. 쓸 수 없는 모델이면 claude.ai가 같은 급의 모델로 대신 답한다.
+const CHIEF = { model: "claude-opus-5-5", modelTier: "complex" };
+const STAFF = { model: "claude-sonnet-5-5", modelTier: "default" };
+
 const toError = (e) => new Error(ERRORS[e?.code] || "Claude 응답 중 오류가 생겼어요. 잠시 후 다시 시도해 주세요.");
 
 async function getSample() {
@@ -26,7 +30,7 @@ export async function loadConfig() {
   return {
     agents: AGENTS.map(({ system, ...rest }) => rest),
     ready: true,
-    status: "테스트 · 내 Claude 계정으로 동작",
+    status: "테스트 · 코토 Opus · 직원 Sonnet",
   };
 }
 
@@ -38,6 +42,7 @@ export async function chat(agentId, messages, onText) {
   const agent = byId[agentId];
   try {
     const { text } = await sample([{ role: "user", content: `${agent.system}\n\n---\n위 지침대로 일해 주세요. 아래부터 대표님과의 대화입니다.` }, ...messages], {
+      ...(agent.chief ? CHIEF : STAFF),
       cache: false,
       onText: ({ text }) => onText(text),
     });
@@ -56,7 +61,7 @@ export async function delegate(messages) {
     `agentId는 다음 중 하나여야 합니다: ${STAFF_IDS.join(", ")}`;
   let plan;
   try {
-    plan = await sample.json(prompt, { cache: false });
+    plan = await sample.json(prompt, { ...CHIEF, cache: false });
   } catch (e) {
     throw toError(e);
   }
