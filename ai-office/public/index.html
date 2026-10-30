@@ -14,7 +14,7 @@
       <span class="logo">🏢</span>
       <div>
         <h1>홈페이션 AI 오피스</h1>
-        <p class="sub">AI 직원에게 업무를 맡겨 보세요</p>
+        <p class="sub">직원을 클릭해 업무를 맡겨 보세요</p>
       </div>
     </div>
     <div class="top-actions">
@@ -24,7 +24,15 @@
   </header>
 
   <main class="layout">
-    <section class="floor" id="floor" aria-label="사무실 배치도"></section>
+    <section class="floor" aria-label="사무실">
+      <div class="office-scroll" id="officeScroll">
+        <div class="office-stage">
+          <canvas id="office" aria-label="픽셀아트 사무실. 직원을 클릭하면 대화창이 열립니다."></canvas>
+          <div class="overlay" id="overlay"></div>
+        </div>
+      </div>
+      <div class="roster" id="roster" aria-label="직원 목록"></div>
+    </section>
 
     <aside class="log">
       <h2>📒 오늘의 업무 일지</h2>
@@ -36,7 +44,7 @@
   <div class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-head">
       <div class="who">
-        <span class="avatar" id="dAvatar"></span>
+        <img class="avatar" id="dAvatar" alt="" />
         <div>
           <strong id="dName"></strong>
           <span class="role" id="dTitle"></span>
@@ -55,22 +63,20 @@
     </form>
   </div>
 
-  <!-- 회의실 -->
-  <div class="modal" id="meeting" aria-hidden="true">
-    <div class="modal-card">
-      <div class="drawer-head">
-        <div class="who"><span class="avatar">👥</span><strong>회의실</strong></div>
-        <button class="icon-btn" id="meetingClose" aria-label="닫기">✕</button>
-      </div>
-      <form id="meetingForm" class="meeting-form">
-        <label class="field-label">회의 안건</label>
-        <textarea id="meetingTopic" rows="3" placeholder="예: 동네 베이커리 홈페이지 신규 제작 의뢰가 들어왔어. 각자 맡은 분야에서 첫 제안을 해줘."></textarea>
-        <label class="field-label">참석자 <span class="hint">(발언 순서대로, 앞사람 의견을 참고해서 말해요)</span></label>
-        <div id="attendees" class="attendees"></div>
-        <button class="btn primary" type="submit" id="meetingStart">회의 시작</button>
-      </form>
-      <div id="minutes" class="messages minutes"></div>
+  <!-- 회의실 (사무실이 보이도록 옆 패널로 연다) -->
+  <div class="drawer" id="meeting" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="who"><span class="avatar emoji">👥</span><strong>회의실</strong></div>
+      <button class="icon-btn" id="meetingClose" aria-label="닫기">✕</button>
     </div>
+    <form id="meetingForm" class="meeting-form">
+      <label class="field-label" for="meetingTopic">회의 안건</label>
+      <textarea id="meetingTopic" rows="3" placeholder="예: 동네 베이커리 홈페이지 신규 제작 의뢰가 들어왔어. 각자 맡은 분야에서 첫 제안을 해줘."></textarea>
+      <span class="field-label">참석자 <span class="hint">(발언 순서대로, 앞사람 의견을 참고해서 말해요)</span></span>
+      <div id="attendees" class="attendees"></div>
+      <button class="btn primary" type="submit" id="meetingStart">회의 시작</button>
+    </form>
+    <div id="minutes" class="messages minutes"></div>
   </div>
 
   <script type="module" src="app.js"></script>

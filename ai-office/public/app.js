@@ -1,15 +1,4 @@
-// 3x3 배치: 비서실(코토)이 가운데, 부서들이 둘러싼다.
-const ROOMS = [
-  { id: "planning", name: "기획실", deco: "📋🗓️" },
-  { id: "studio", name: "디자인 스튜디오", deco: "🖌️🪴" },
-  { id: "marketing", name: "마케팅룸", deco: "📊📣" },
-  { id: "dev", name: "개발실", deco: "🖥️☕" },
-  { id: "chief", name: "비서실", deco: "📞🗂️", hint: "업무를 맡기면 코토가 담당자에게 나눠 주고 결과를 모아 보고해요." },
-  { id: "admin", name: "경영지원실", deco: "🗄️🧾" },
-  { id: "meeting", name: "회의실", deco: "🪑🪑", special: `<div class="big">👥</div><div>여러 직원 의견을<br>한 번에 듣기</div>` },
-  { id: "ceo", name: "대표실", deco: "🏆", special: `<div class="big">👔</div><div>대표님 자리<br>업무는 코토에게!</div>` },
-  { id: "lounge", name: "휴게실", deco: "", special: `<div class="big">☕🛋️🪴</div><div>책상을 클릭해<br>업무를 맡기세요</div>` },
-];
+import { createOffice } from "./office.js";
 
 const HISTORY_KEY = "aiOffice.history";
 const LOG_KEY = "aiOffice.log";
@@ -18,6 +7,7 @@ const PASSWORD_KEY = "aiOffice.password";
 const $ = (sel) => document.querySelector(sel);
 
 let agents = [];
+let office = null; // 픽셀아트 사무실
 let current = null; // 대화 중인 직원
 let passwordRequired = false;
 const busy = new Set(); // 지금 일하고 있는 직원 id
@@ -159,49 +149,37 @@ function ensurePassword() {
   return true;
 }
 
-// ---------- 사무실 배치도 ----------
-function renderFloor() {
-  const floor = $("#floor");
-  floor.innerHTML = "";
-  for (const room of ROOMS) {
-    const el = document.createElement("div");
-    el.className = `room room-${room.id}${room.special ? " special" : ""}`;
-    el.innerHTML = `<div class="room-name"><span>${room.name}</span><span class="room-deco">${room.deco}</span></div>`;
-    if (room.special) {
-      el.insertAdjacentHTML("beforeend", `<div class="special-body">${room.special}</div>`);
-      if (room.id === "meeting") {
-        el.classList.add("clickable");
-        el.addEventListener("click", openMeeting);
-      }
-      floor.append(el);
-      continue;
-    }
-    for (const agent of agents.filter((a) => a.room === room.id)) {
-      const desk = document.createElement("button");
-      desk.className = "desk";
-      desk.dataset.id = agent.id;
-      desk.style.setProperty("--agent-color", agent.color);
-      desk.innerHTML = `
-        <span class="avatar">${agent.emoji}</span>
-        <span class="info">
-          <span class="name">${escapeHtml(agent.name)}</span><span class="title">${escapeHtml(agent.title)}</span>
-          <p class="intro">${escapeHtml(agent.intro)}</p>
-          <div class="state">대기 중</div>
-        </span>`;
-      desk.addEventListener("click", () => openDrawer(agent));
-      el.append(desk);
-    }
-    if (room.hint) el.insertAdjacentHTML("beforeend", `<p class="room-hint">${room.hint}</p>`);
-    floor.append(el);
+// ---------- 직원 목록 (사무실 아래) ----------
+const STATE_LABEL = { idle: "대기 중", working: "작업 중…", done: "작업 완료" };
+
+function renderRoster() {
+  const roster = $("#roster");
+  roster.innerHTML = "";
+  for (const agent of agents) {
+    const btn = document.createElement("button");
+    btn.className = `staff${agent.chief ? " chief" : ""}`;
+    btn.dataset.id = agent.id;
+    btn.style.setProperty("--agent-color", agent.color);
+    btn.innerHTML = `
+      <img src="${office.avatar(agent.id)}" alt="" />
+      <span class="info">
+        <span class="name">${escapeHtml(agent.name)}<small>${escapeHtml(agent.title)}</small></span>
+        <span class="state">${STATE_LABEL.idle}</span>
+      </span>`;
+    btn.title = agent.intro;
+    btn.addEventListener("click", () => openDrawer(agent));
+    roster.append(btn);
   }
 }
 
 function setDeskState(agentId, state, label) {
-  const desk = document.querySelector(`.desk[data-id="${agentId}"]`);
-  if (!desk) return;
-  desk.classList.remove("working", "done");
-  if (state !== "idle") desk.classList.add(state);
-  desk.querySelector(".state").textContent = label || { idle: "대기 중", working: "작업 중…", done: "작업 완료" }[state];
+  office?.setWorking(agentId, state === "working");
+  if (state === "done") office?.flash(agentId);
+  const staff = document.querySelector(`.staff[data-id="${agentId}"]`);
+  if (!staff) return;
+  staff.classList.remove("working", "done");
+  if (state !== "idle") staff.classList.add(state);
+  staff.querySelector(".state").textContent = label || STATE_LABEL[state];
 }
 
 // ---------- 업무 일지 ----------
@@ -260,10 +238,11 @@ function setBubbleText(el, text) {
 
 // ---------- 1:1 대화 ----------
 function openDrawer(agent) {
+  closeMeeting();
   current = agent;
   const drawer = $("#drawer");
   drawer.style.setProperty("--agent-color", agent.color);
-  $("#dAvatar").textContent = agent.emoji;
+  $("#dAvatar").src = office.avatar(agent.id, 4);
   $("#dName").textContent = agent.name;
   $("#dTitle").textContent = agent.title;
 
@@ -293,7 +272,7 @@ function renderMessages() {
   box.innerHTML = "";
   const history = histories[current.id] || [];
   if (!history.length) {
-    box.innerHTML = `<div class="empty-chat"><div class="big">${current.emoji}</div>안녕하세요, ${escapeHtml(current.title)} ${escapeHtml(current.name)}입니다.<br>${escapeHtml(current.intro)}<br>위의 업무 버튼을 누르거나 직접 적어 주세요.</div>`;
+    box.innerHTML = `<div class="empty-chat"><img class="big-avatar" src="${office.avatar(current.id, 5)}" alt="" />안녕하세요, ${escapeHtml(current.title)} ${escapeHtml(current.name)}입니다.<br>${escapeHtml(current.intro)}<br>위의 업무 버튼을 누르거나 직접 적어 주세요.</div>`;
     return;
   }
   for (const m of history) {
@@ -410,6 +389,8 @@ async function delegateTask(chief, text) {
         .join("\n");
     parts.push({ speaker: chiefName, text: planText });
     show("assistant", planText, chiefName);
+    // 코토가 담당자 자리로 걸어가 업무를 전달한다 (응답을 기다리지 않고 함께 진행)
+    office.deliver(chief.id, plan.assignments.map((a) => a.agentId));
     setDeskState(chief.id, "working", "직원들 작업 관리 중…");
 
     const results = [];
@@ -493,7 +474,13 @@ async function delegateTask(chief, text) {
 }
 
 // ---------- 회의실 ----------
+function closeMeeting() {
+  $("#meeting").classList.remove("open");
+  $("#meeting").setAttribute("aria-hidden", "true");
+}
+
 function openMeeting() {
+  closeDrawer();
   const box = $("#attendees");
   box.innerHTML = "";
   for (const agent of agents.filter((a) => !a.chief)) {
@@ -504,6 +491,7 @@ function openMeeting() {
   }
   $("#meeting").classList.add("open");
   $("#meeting").setAttribute("aria-hidden", "false");
+  $("#minutes").scrollTop = 0;
   $("#meetingTopic").focus();
 }
 
@@ -517,6 +505,7 @@ async function runMeeting(topic) {
   bubble(minutes, "user", `안건: ${topic}`);
   $("#meetingStart").disabled = true;
 
+  office.gather(attendees.map((a) => a.id));
   const said = [];
   for (const agent of attendees) {
     const prompt =
@@ -540,6 +529,7 @@ async function runMeeting(topic) {
     }
     el.classList.remove("typing");
   }
+  office.disperse(attendees.map((a) => a.id));
   addLog({ id: attendees[0].id, emoji: "👥", name: "회의" }, topic);
   $("#meetingStart").disabled = false;
 }
@@ -559,7 +549,14 @@ async function init() {
     $("#status").className = "status bad";
     return;
   }
-  renderFloor();
+  office = createOffice({
+    canvas: $("#office"),
+    overlay: $("#overlay"),
+    agents,
+    onSelect: (id) => openDrawer(agents.find((a) => a.id === id)),
+    onMeeting: openMeeting,
+  });
+  renderRoster();
   renderLog();
 
   $("#closeBtn").addEventListener("click", closeDrawer);
@@ -586,18 +583,15 @@ async function init() {
   });
 
   $("#meetingBtn").addEventListener("click", openMeeting);
-  $("#meetingClose").addEventListener("click", () => {
-    $("#meeting").classList.remove("open");
-    $("#meeting").setAttribute("aria-hidden", "true");
-  });
+  $("#meetingClose").addEventListener("click", closeMeeting);
   $("#meetingForm").addEventListener("submit", (e) => {
     e.preventDefault();
     runMeeting($("#meetingTopic").value);
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if ($("#meeting").classList.contains("open")) $("#meetingClose").click();
-    else closeDrawer();
+    closeMeeting();
+    closeDrawer();
   });
 }
 
