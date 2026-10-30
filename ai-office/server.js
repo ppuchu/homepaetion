@@ -4,7 +4,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { handleAgents, handleChat } from "./lib/chat.js";
+import { handleAgents, handleChat, handleDelegate } from "./lib/chat.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(here, "public");
@@ -46,6 +46,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname === "/api/agents") return await handleAgents(req, res);
     if (pathname === "/api/chat") return await handleChat(req, res);
+    if (pathname === "/api/delegate") return await handleDelegate(req, res);
     return await serveStatic(req, res);
   } catch (err) {
     console.error(err);

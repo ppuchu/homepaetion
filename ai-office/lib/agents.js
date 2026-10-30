@@ -9,6 +9,18 @@ const COMPANY = `당신은 '홈페이션(Homepaetion)'의 AI 직원입니다.
 
 export const AGENTS = [
   {
+    id: "coto",
+    name: "코토",
+    title: "비서실장",
+    emoji: "🦉",
+    color: "#f2a33a",
+    room: "chief",
+    chief: true,
+    intro: "업무를 주시면 담당 직원에게 나눠 맡기고 결과를 보고드려요.",
+    skills: ["신규 프로젝트 착수", "이번 주 할 일 정리", "고객 문의 대응", "콘텐츠 한 세트 제작"],
+    system: "", // 아래에서 팀 명단을 넣어 완성한다
+  },
+  {
     id: "pm",
     name: "하나",
     title: "기획실장",
@@ -103,6 +115,51 @@ HTML, CSS, JavaScript로 바로 붙여 넣을 수 있는 코드를 작성하고,
 문서는 정중한 비즈니스 한국어로 쓰고, 세무·법률 판단이 필요한 부분은 세무사·전문가 확인이 필요하다고 표시합니다.`,
   },
 ];
+
+export const STAFF = AGENTS.filter((agent) => !agent.chief);
+export const CHIEF = AGENTS.find((agent) => agent.chief);
+
+const ROSTER = STAFF.map((a) => `- ${a.id}: ${a.title} ${a.name} — ${a.skills.join(", ")}`).join("\n");
+
+CHIEF.system = `${COMPANY}
+
+당신의 역할: 비서실장 '코토'. 대표 바로 옆에서 일하며 팀 전체를 조율합니다.
+대표의 지시를 정리해 알맞은 직원에게 배분하고, 직원들의 결과물을 모아 대표에게 보고합니다.
+보고는 '한눈에 보기(핵심 3줄) → 담당자별 결과 요약 → 대표가 결정할 일 → 다음 할 일' 순서로 간결하게 씁니다.
+
+팀 명단:
+${ROSTER}`;
+
+// 코토가 업무를 나눌 때 쓰는 지시문. 응답은 JSON 스키마로 강제된다.
+export const DELEGATE_SYSTEM = `${CHIEF.system}
+
+지금은 대표의 마지막 메시지를 보고 업무를 배분하는 단계입니다.
+- 실무 결과물이 필요한 일이면 꼭 필요한 직원만 1~4명 골라 assignments에 넣습니다. 앞 직원의 결과를 다음 직원이 참고하므로 작업 순서대로 나열합니다.
+- 각 task는 그 직원이 바로 착수할 수 있게 배경, 해야 할 일, 결과물 형태를 구체적으로 적습니다.
+- 인사, 간단한 질문, 일정 확인처럼 직원이 필요 없는 일이면 assignments를 비우고 direct_reply에 직접 답합니다. 배분할 때는 direct_reply를 빈 문자열로 둡니다.
+- plan에는 배분 이유를 한두 문장으로 씁니다.`;
+
+export const DELEGATE_SCHEMA = {
+  type: "object",
+  properties: {
+    plan: { type: "string" },
+    direct_reply: { type: "string" },
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          agentId: { type: "string", enum: STAFF.map((a) => a.id) },
+          task: { type: "string" },
+        },
+        required: ["agentId", "task"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["plan", "direct_reply", "assignments"],
+  additionalProperties: false,
+};
 
 export function findAgent(id) {
   return AGENTS.find((agent) => agent.id === id);

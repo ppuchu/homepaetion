@@ -13,6 +13,8 @@
   --bubble-ai: #ffffff;
   --code-bg: #f3f2f7;
   --shadow: 0 6px 24px rgba(30, 25, 60, 0.12);
+  --chief: #f2a33a;
+  --chief-ink: #a5620a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,6 +33,7 @@
     --bubble-ai: #2a2935;
     --code-bg: #1d1c25;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    --chief-ink: #f6c27a;
   }
 }
 
@@ -134,8 +137,32 @@ button, textarea { font: inherit; color: inherit; }
   justify-content: space-between;
 }
 .room-deco { font-size: 18px; letter-spacing: 4px; }
-.room.lounge { align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 14px; }
-.room.lounge .big { font-size: 40px; letter-spacing: 8px; }
+.room.special .special-body {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; color: var(--muted); font-size: 13.5px;
+}
+.room.special .big { font-size: 36px; letter-spacing: 6px; }
+.room.clickable { cursor: pointer; }
+.room.clickable:hover { border-color: var(--accent); }
+
+/* 비서실: 사무실 한가운데, 모든 부서와 연결 */
+.room-chief {
+  border: 2px solid var(--chief);
+  background: color-mix(in srgb, var(--chief) 12%, var(--card));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--chief) 18%, transparent);
+  z-index: 1;
+}
+.room-chief .room-name { color: var(--chief-ink); }
+.room-chief .desk { border-width: 2px; border-left-width: 6px; }
+.room-chief .avatar { width: 56px; height: 56px; font-size: 30px; }
+.room-hint { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+/* 비서실에서 사방 부서로 뻗는 연결선 (방 바깥 통로 부분만 그린다) */
+.room-chief::before, .room-chief::after {
+  content: ""; position: absolute; pointer-events: none;
+  --edge: var(--chief) 0 20px, transparent 20px calc(100% - 20px), var(--chief) calc(100% - 20px);
+}
+.room-chief::before { left: -20px; right: -20px; top: 50%; height: 3px; background: linear-gradient(to right, var(--edge)); }
+.room-chief::after { top: -20px; bottom: -20px; left: 50%; width: 3px; background: linear-gradient(to bottom, var(--edge)); }
 
 .desk {
   display: flex;
@@ -296,6 +323,8 @@ button, textarea { font: inherit; color: inherit; }
 /* ---------- 반응형 ---------- */
 @media (max-width: 1080px) {
   .floor { grid-template-columns: repeat(2, 1fr); }
+  .room-chief { order: -1; grid-column: 1 / -1; }
+  .room-chief::before, .room-chief::after { display: none; }
 }
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; padding: 16px; }
@@ -305,5 +334,7 @@ button, textarea { font: inherit; color: inherit; }
   .topbar { padding: 12px 16px; }
   .floor { grid-template-columns: 1fr; padding: 10px; border-width: 4px; }
   .room { min-height: 0; }
-  .room.lounge { display: none; }
+  .room-chief { order: -1; }
+  .room-chief::before, .room-chief::after { display: none; }
+  .room-ceo, .room-lounge { display: none; }
 }

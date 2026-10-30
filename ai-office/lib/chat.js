@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { findAgent, publicAgents } from "./agents.js";
+import { DELEGATE_SCHEMA, DELEGATE_SYSTEM, findAgent, publicAgents } from "./agents.js";
 
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const MAX_MESSAGES = 40;
@@ -56,24 +56,68 @@ export async function handleAgents(req, res) {
   });
 }
 
-export async function handleChat(req, res) {
-  if (req.method !== "POST") return sendJson(res, 405, { error: "POST만 지원합니다." });
-  if (!isAuthorized(req)) return sendJson(res, 401, { error: "오피스 비밀번호가 올바르지 않습니다." });
+// 공통 검사를 통과하면 요청 본문을, 아니면 에러 응답을 보내고 null을 돌려준다.
+async function readValidRequest(req, res) {
+  if (req.method !== "POST") return sendJson(res, 405, { error: "POST만 지원합니다." }), null;
+  if (!isAuthorized(req)) return sendJson(res, 401, { error: "오피스 비밀번호가 올바르지 않습니다." }), null;
   if (!process.env.ANTHROPIC_API_KEY) {
-    return sendJson(res, 500, { error: "서버에 ANTHROPIC_API_KEY가 설정되지 않았습니다." });
+    return sendJson(res, 500, { error: "서버에 ANTHROPIC_API_KEY가 설정되지 않았습니다." }), null;
   }
 
   let body;
   try {
     body = await readBody(req);
   } catch {
-    return sendJson(res, 400, { error: "요청 형식이 올바르지 않습니다." });
+    return sendJson(res, 400, { error: "요청 형식이 올바르지 않습니다." }), null;
   }
+  const invalid = validateMessages(body.messages);
+  if (invalid) return sendJson(res, 400, { error: invalid }), null;
+  return body;
+}
 
+function errorMessage(err) {
+  if (err instanceof Anthropic.AuthenticationError) return "API 키가 올바르지 않습니다.";
+  if (err instanceof Anthropic.RateLimitError) return "요청이 많아요. 잠시 후 다시 시도해 주세요.";
+  if (err instanceof Anthropic.APIError && err.status >= 500) return "Claude 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해 주세요.";
+  if (err instanceof Anthropic.APIConnectionError) return "Claude 서버에 연결하지 못했어요.";
+  return "AI 응답 중 오류가 발생했어요.";
+}
+
+// 비서실장 코토가 업무를 어느 직원에게 맡길지 정한다 (JSON 응답).
+export async function handleDelegate(req, res) {
+  const body = await readValidRequest(req, res);
+  if (!body) return;
+
+  try {
+    const response = await getClient().beta.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      output_config: { effort: "medium", format: { type: "json_schema", schema: DELEGATE_SCHEMA } },
+      system: DELEGATE_SYSTEM,
+      messages: body.messages.map(({ role, content }) => ({ role, content })),
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+    });
+    if (response.stop_reason === "refusal") {
+      return sendJson(res, 422, { error: "이 요청은 처리할 수 없어요. 질문을 바꿔서 다시 맡겨 주세요." });
+    }
+    const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const plan = JSON.parse(text);
+    // 같은 직원이 여러 번 나오거나 너무 많으면 정리한다
+    const seen = new Set();
+    plan.assignments = plan.assignments.filter((a) => findAgent(a.agentId) && !seen.has(a.agentId) && seen.add(a.agentId)).slice(0, 4);
+    sendJson(res, 200, plan);
+  } catch (err) {
+    console.error("[delegate]", err);
+    sendJson(res, 502, { error: err instanceof SyntaxError ? "업무 배분 결과를 읽지 못했어요. 다시 시도해 주세요." : errorMessage(err) });
+  }
+}
+
+export async function handleChat(req, res) {
+  const body = await readValidRequest(req, res);
+  if (!body) return;
   const agent = findAgent(body.agentId);
   if (!agent) return sendJson(res, 400, { error: "존재하지 않는 직원입니다." });
-  const invalid = validateMessages(body.messages);
-  if (invalid) return sendJson(res, 400, { error: invalid });
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -110,12 +154,7 @@ export async function handleChat(req, res) {
   } catch (err) {
     if (err instanceof Anthropic.APIUserAbortError) return;
     console.error("[chat]", err);
-    let message = "AI 응답 중 오류가 발생했어요.";
-    if (err instanceof Anthropic.AuthenticationError) message = "API 키가 올바르지 않습니다.";
-    else if (err instanceof Anthropic.RateLimitError) message = "요청이 많아요. 잠시 후 다시 시도해 주세요.";
-    else if (err instanceof Anthropic.APIError && err.status >= 500) message = "Claude 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해 주세요.";
-    else if (err instanceof Anthropic.APIConnectionError) message = "Claude 서버에 연결하지 못했어요.";
-    send({ type: "error", message });
+    send({ type: "error", message: errorMessage(err) });
   }
   res.end();
 }
