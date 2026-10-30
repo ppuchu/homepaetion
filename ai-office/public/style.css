@@ -118,7 +118,7 @@ button, textarea { font: inherit; color: inherit; }
 /* ---------- 레이아웃 ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   padding: 20px 24px 40px;
   max-width: 1500px;
@@ -127,15 +127,34 @@ button, textarea { font: inherit; color: inherit; }
 
 .floor { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 
+/* ---------- 층 탭 ---------- */
+.floor-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: -6px; }
+.floor-tab {
+  font-family: var(--pixel);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border: 3px solid var(--ink);
+  border-bottom: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.floor-tab[aria-selected="true"] { background: #2b2d42; color: #fff; }
+.floor-tab .badge { font-size: 11px; font-weight: 400; padding: 1px 6px; background: var(--chief); color: var(--ink); }
+
 /* ---------- 픽셀 사무실 ---------- */
 .office-scroll {
   overflow-x: auto;
+  text-align: center;
   overflow-y: hidden;
   background: #2b2d42;
   border: 4px solid var(--ink);
   box-shadow: 6px 6px 0 var(--ink);
 }
-.office-stage { position: relative; }
+.office-stage { position: relative; margin: 0 auto; text-align: left; }
 .office-stage canvas {
   display: block;
   width: 100%;
@@ -172,9 +191,11 @@ button, textarea { font: inherit; color: inherit; }
 .name-tag.working { background: var(--agent-color); color: var(--ink); }
 
 /* ---------- 직원 목록 ---------- */
-.roster {
+.roster { display: flex; flex-direction: column; gap: 12px; }
+.roster-group h3 { font-family: var(--pixel); font-size: 13px; margin: 0 0 6px; }
+.roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
 }
 .staff {
@@ -207,10 +228,7 @@ button, textarea { font: inherit; color: inherit; }
   border: 3px solid var(--ink);
   box-shadow: 4px 4px 0 var(--ink);
   padding: 14px;
-  align-self: start;
-  position: sticky;
-  top: 16px;
-  max-height: calc(100vh - 32px);
+  max-height: 320px;
   overflow: auto;
 }
 .log h2 { font-family: var(--pixel); font-size: 14px; margin: 0 0 10px; }
@@ -303,20 +321,23 @@ button, textarea { font: inherit; color: inherit; }
 .meeting-form { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-bottom: 3px solid var(--ink); background: var(--panel); }
 .field-label { font-size: 13px; font-weight: 700; font-family: var(--pixel); }
 .hint { font-weight: 400; color: var(--muted); }
-.attendees { display: flex; flex-wrap: wrap; gap: 6px; }
+.attendees { display: flex; flex-direction: column; gap: 8px; }
+.attendee-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.attendee-floor { font-family: var(--pixel); font-size: 12px; font-weight: 700; width: 100%; }
+.attendee small { color: var(--muted); margin-left: 2px; }
+.attendee:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
 .attendee { display: inline-flex; align-items: center; gap: 4px; border: 2px solid var(--ink); padding: 3px 8px; font-size: 12px; background: var(--bg); cursor: pointer; font-family: var(--pixel); }
 .attendee input { accent-color: var(--accent); }
 .minutes { min-height: 120px; }
 
 /* ---------- 반응형 ---------- */
 @media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; padding: 16px; }
-  .log { position: static; max-height: none; }
+  .layout { padding: 16px; }
 }
 @media (max-width: 560px) {
   .topbar { padding: 10px 16px; }
   .brand h1 { font-size: 17px; }
-  .roster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .drawer { transition: none; }

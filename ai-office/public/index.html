@@ -25,6 +25,7 @@
 
   <main class="layout">
     <section class="floor" aria-label="사무실">
+      <div class="floor-tabs" id="floorTabs" role="tablist" aria-label="층 선택"></div>
       <div class="office-scroll" id="officeScroll">
         <div class="office-stage">
           <canvas id="office" aria-label="픽셀아트 사무실. 직원을 클릭하면 대화창이 열립니다."></canvas>
@@ -72,7 +73,7 @@
     <form id="meetingForm" class="meeting-form">
       <label class="field-label" for="meetingTopic">회의 안건</label>
       <textarea id="meetingTopic" rows="3" placeholder="예: 동네 베이커리 홈페이지 신규 제작 의뢰가 들어왔어. 각자 맡은 분야에서 첫 제안을 해줘."></textarea>
-      <span class="field-label">참석자 <span class="hint">(발언 순서대로, 앞사람 의견을 참고해서 말해요)</span></span>
+      <span class="field-label">참석자 <span class="hint">(최대 8명 · 고른 순서대로 발언하고, 앞사람 의견을 참고해요)</span></span>
       <div id="attendees" class="attendees"></div>
       <button class="btn primary" type="submit" id="meetingStart">회의 시작</button>
     </form>

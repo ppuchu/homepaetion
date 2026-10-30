@@ -152,28 +152,65 @@ function ensurePassword() {
 // ---------- 직원 목록 (사무실 아래) ----------
 const STATE_LABEL = { idle: "대기 중", working: "작업 중…", done: "작업 완료" };
 
+const working = new Set(); // 사무실에서 일하고 있는 직원 (층 탭 표시용)
+const MAX_ATTENDEES = 8;
+
+function renderFloorTabs() {
+  const tabs = $("#floorTabs");
+  tabs.innerHTML = "";
+  for (const floor of office.floors) {
+    const btn = document.createElement("button");
+    btn.className = "floor-tab";
+    btn.type = "button";
+    btn.setAttribute("role", "tab");
+    btn.dataset.floor = floor.id;
+    btn.innerHTML = `${floor.icon} ${escapeHtml(floor.name)} <span class="badge" hidden></span>`;
+    btn.addEventListener("click", () => office.setFloor(floor.id));
+    tabs.append(btn);
+  }
+}
+
+function updateFloorTabs(active) {
+  for (const btn of document.querySelectorAll(".floor-tab")) {
+    if (active) btn.setAttribute("aria-selected", String(btn.dataset.floor === active));
+    const count = [...working].filter((id) => office.floorOf(id) === btn.dataset.floor).length;
+    const badge = btn.querySelector(".badge");
+    badge.hidden = !count;
+    badge.textContent = `${count}명 작업 중`;
+  }
+}
+
 function renderRoster() {
   const roster = $("#roster");
   roster.innerHTML = "";
-  for (const agent of agents) {
-    const btn = document.createElement("button");
-    btn.className = `staff${agent.chief ? " chief" : ""}`;
-    btn.dataset.id = agent.id;
-    btn.style.setProperty("--agent-color", agent.color);
-    btn.innerHTML = `
-      <img src="${office.avatar(agent.id)}" alt="" />
-      <span class="info">
-        <span class="name">${escapeHtml(agent.name)}<small>${escapeHtml(agent.title)}</small></span>
-        <span class="state">${STATE_LABEL.idle}</span>
-      </span>`;
-    btn.title = agent.intro;
-    btn.addEventListener("click", () => openDrawer(agent));
-    roster.append(btn);
+  for (const floor of office.floors) {
+    const group = document.createElement("div");
+    group.className = "roster-group";
+    group.innerHTML = `<h3>${floor.icon} ${escapeHtml(floor.name)}</h3><div class="roster-grid"></div>`;
+    for (const agent of agents.filter((a) => office.floorOf(a.id) === floor.id)) {
+      const btn = document.createElement("button");
+      btn.className = `staff${agent.chief || agent.lead ? " chief" : ""}`;
+      btn.dataset.id = agent.id;
+      btn.style.setProperty("--agent-color", agent.color);
+      btn.innerHTML = `
+        <img src="${office.avatar(agent.id)}" alt="" />
+        <span class="info">
+          <span class="name">${escapeHtml(agent.name)}<small>${escapeHtml(agent.title)}</small></span>
+          <span class="state">${STATE_LABEL.idle}</span>
+        </span>`;
+      btn.title = agent.intro;
+      btn.addEventListener("click", () => openDrawer(agent));
+      group.querySelector(".roster-grid").append(btn);
+    }
+    roster.append(group);
   }
 }
 
 function setDeskState(agentId, state, label) {
   office?.setWorking(agentId, state === "working");
+  if (state === "working") working.add(agentId);
+  else working.delete(agentId);
+  updateFloorTabs();
   if (state === "done") office?.flash(agentId);
   const staff = document.querySelector(`.staff[data-id="${agentId}"]`);
   if (!staff) return;
@@ -239,6 +276,7 @@ function setBubbleText(el, text) {
 // ---------- 1:1 대화 ----------
 function openDrawer(agent) {
   closeMeeting();
+  office.setFloor(office.floorOf(agent.id));
   current = agent;
   const drawer = $("#drawer");
   drawer.style.setProperty("--agent-color", agent.color);
@@ -483,12 +521,24 @@ function openMeeting() {
   closeDrawer();
   const box = $("#attendees");
   box.innerHTML = "";
-  for (const agent of agents.filter((a) => !a.chief)) {
-    const label = document.createElement("label");
-    label.className = "attendee";
-    label.innerHTML = `<input type="checkbox" value="${agent.id}" checked> ${agent.emoji} ${escapeHtml(agent.name)}`;
-    box.append(label);
+  for (const floor of office.floors) {
+    const row = document.createElement("div");
+    row.className = "attendee-row";
+    row.innerHTML = `<span class="attendee-floor">${floor.icon} ${escapeHtml(floor.name)}</span>`;
+    for (const agent of agents.filter((a) => !a.chief && office.floorOf(a.id) === floor.id)) {
+      const label = document.createElement("label");
+      label.className = "attendee";
+      label.innerHTML = `<input type="checkbox" value="${agent.id}"> ${agent.emoji} ${escapeHtml(agent.name)}<small>${escapeHtml(agent.title)}</small>`;
+      row.append(label);
+    }
+    box.append(row);
   }
+  // 고른 순서를 기억해 그 순서대로 발언하게 하고, 8명이 차면 나머지는 막는다
+  box.onchange = (e) => {
+    if (e.target.checked) e.target.dataset.order = String(Date.now());
+    const checked = box.querySelectorAll("input:checked").length;
+    for (const input of box.querySelectorAll("input")) input.disabled = !input.checked && checked >= MAX_ATTENDEES;
+  };
   $("#meeting").classList.add("open");
   $("#meeting").setAttribute("aria-hidden", "false");
   $("#minutes").scrollTop = 0;
@@ -496,16 +546,20 @@ function openMeeting() {
 }
 
 async function runMeeting(topic) {
-  const ids = [...document.querySelectorAll("#attendees input:checked")].map((i) => i.value);
-  const attendees = agents.filter((a) => ids.includes(a.id));
-  if (!topic.trim() || !attendees.length || !ensurePassword()) return;
+  const ids = [...document.querySelectorAll("#attendees input:checked")]
+    .sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order))
+    .map((i) => i.value);
+  const attendees = ids.map((id) => agents.find((a) => a.id === id));
+  if (!topic.trim()) return alert("회의 안건을 적어 주세요.");
+  if (!attendees.length) return alert("참석할 직원을 골라 주세요.");
+  if (!ensurePassword()) return;
 
   const minutes = $("#minutes");
   minutes.innerHTML = "";
   bubble(minutes, "user", `안건: ${topic}`);
   $("#meetingStart").disabled = true;
 
-  office.gather(attendees.map((a) => a.id));
+  office.setFloor(office.gather(attendees.map((a) => a.id)));
   const said = [];
   for (const agent of attendees) {
     const prompt =
@@ -555,7 +609,10 @@ async function init() {
     agents,
     onSelect: (id) => openDrawer(agents.find((a) => a.id === id)),
     onMeeting: openMeeting,
+    onFloorChange: (id) => updateFloorTabs(id),
   });
+  renderFloorTabs();
+  updateFloorTabs("hq");
   renderRoster();
   renderLog();
 

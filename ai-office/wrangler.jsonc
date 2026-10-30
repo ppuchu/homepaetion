@@ -8,6 +8,8 @@
     "binding": "ASSETS"
   },
   "observability": { "enabled": true },
+  // 부서 지침(src/guidelines/*.md)을 텍스트로 불러온다
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
   // 모델을 바꾸려면 여기 값을 수정. API 키와 비밀번호는 secret으로 넣는다 (README 참고)
   "vars": {
     "CLAUDE_MODEL": "claude-opus-5-5"
