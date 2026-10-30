@@ -1,9 +1,9 @@
 import { createOffice } from "./office.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { createMessenger } from "./messenger.js";
+import { chat, delegate, ensureAccess, loadConfig } from "./api.js";
 
 const HISTORY_KEY = "aiOffice.history";
-const PASSWORD_KEY = "aiOffice.password";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -11,7 +11,6 @@ let agents = [];
 let office = null; // 픽셀아트 사무실
 let messenger = null; // 사내 메신저
 let current = null; // 대화 중인 직원
-let passwordRequired = false;
 const busy = new Set(); // 지금 일하고 있는 직원 id
 
 // ---------- 저장소 (브라우저마다 따로 보관) ----------
@@ -30,57 +29,10 @@ function save(key, value) {
 const histories = load(HISTORY_KEY, {});
 
 // ---------- API ----------
-async function post(url, payload) {
-  const headers = { "Content-Type": "application/json" };
-  const password = load(PASSWORD_KEY, "");
-  if (password) headers["x-office-password"] = password;
-
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 401) save(PASSWORD_KEY, "");
-    throw new Error(data.error || `요청 실패 (${res.status})`);
-  }
-  return res;
-}
-
 const toApi = (history) => history.map(({ role, content }) => ({ role, content }));
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max)}\n…(이하 생략)` : text);
-
-async function streamChat(agentId, messages, onText) {
-  const res = await post("/api/chat", { agentId, messages: toApi(messages) });
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let text = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop();
-    for (const raw of events) {
-      if (!raw.startsWith("data: ")) continue;
-      const event = JSON.parse(raw.slice(6));
-      if (event.type === "text") {
-        text += event.text;
-        onText(text);
-      } else if (event.type === "error") {
-        throw new Error(event.message);
-      }
-    }
-  }
-  return text;
-}
-
-function ensurePassword() {
-  if (!passwordRequired || load(PASSWORD_KEY, "")) return true;
-  const value = prompt("오피스 비밀번호를 입력하세요.");
-  if (!value) return false;
-  save(PASSWORD_KEY, value);
-  return true;
-}
+const streamChat = (agentId, messages, onText) => chat(agentId, toApi(messages), onText);
+const ensurePassword = ensureAccess;
 
 // ---------- 직원 목록 (사무실 아래) ----------
 const STATE_LABEL = { idle: "대기 중", working: "작업 중…", done: "작업 완료" };
@@ -403,7 +355,7 @@ async function delegateTask(text, { fromDrawer } = {}) {
   try {
     const el = show("assistant", "업무를 검토하고 있어요…", chiefName);
     el?.classList.add("typing");
-    const plan = await (await post("/api/delegate", { messages: toApi(history) })).json();
+    const plan = await delegate(toApi(history));
     el?.remove();
 
     // 부서가 필요 없는 일은 코토가 바로 답한다
@@ -615,8 +567,9 @@ async function runMeeting(topic) {
     .sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order))
     .map((i) => i.value);
   const attendees = ids.map((id) => agentById(id));
-  if (!topic.trim()) return alert("회의 안건을 적어 주세요.");
-  if (!attendees.length) return alert("참석할 직원을 골라 주세요.");
+  const hint = $("#meetingHint");
+  hint.textContent = !topic.trim() ? "회의 안건을 적어 주세요." : !attendees.length ? "참석할 직원을 골라 주세요." : "";
+  if (hint.textContent) return;
   if (!ensurePassword()) return;
 
   const minutes = $("#minutes");
@@ -661,13 +614,11 @@ async function runMeeting(topic) {
 // ---------- 시작 ----------
 async function init() {
   try {
-    const res = await fetch("/api/agents");
-    const data = await res.json();
-    agents = data.agents;
-    passwordRequired = data.passwordRequired;
+    const config = await loadConfig();
+    agents = config.agents;
     const status = $("#status");
-    status.textContent = data.ready ? `AI 연결됨 · ${data.model}` : "API 키 미설정";
-    status.className = `status ${data.ready ? "ok" : "bad"}`;
+    status.textContent = config.status;
+    status.className = `status ${config.ready ? "ok" : "bad"}`;
   } catch {
     $("#status").textContent = "서버 연결 실패";
     $("#status").className = "status bad";
@@ -703,9 +654,19 @@ async function init() {
   $("#messengerBtn").addEventListener("click", () => messenger.focus());
 
   $("#closeBtn").addEventListener("click", closeDrawer);
+  // 실수로 지우지 않게 두 번 눌러야 지워진다
+  let clearArmed = 0;
   $("#clearBtn").addEventListener("click", () => {
     if (!current || busy.has(current.id)) return;
-    if (!confirm(`${current.name}와(과)의 대화 기록을 지우고 새 업무를 시작할까요?`)) return;
+    const btn = $("#clearBtn");
+    if (Date.now() - clearArmed > 3000) {
+      clearArmed = Date.now();
+      btn.textContent = "한 번 더 누르면 지워져요";
+      setTimeout(() => (btn.textContent = "🧹 새 업무"), 3000);
+      return;
+    }
+    clearArmed = 0;
+    btn.textContent = "🧹 새 업무";
     delete histories[current.id];
     save(HISTORY_KEY, histories);
     setDeskState(current.id, "idle");

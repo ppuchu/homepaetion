@@ -84,6 +84,16 @@ npm run dev                      # http://localhost:8787
 
 API 키는 [Anthropic 콘솔](https://console.anthropic.com)에서 발급합니다. 키는 서버(Worker)에서만 쓰이고 브라우저로 전달되지 않습니다.
 
+## claude.ai 테스트 페이지
+
+API 키나 배포 없이 화면과 직원들을 시험해 볼 수 있는 페이지입니다. 직원들은 페이지를 연 사람의 Claude 계정으로 답합니다(처음 한 번 허용 필요).
+
+```bash
+node scripts/build-demo.mjs   # dist-demo/ 생성
+```
+
+화면(`public/`)은 그대로 쓰고, Claude를 부르는 `api.js`만 `demo/api.js`로 바꿔 끼웁니다. 부서 지침을 고친 뒤 다시 실행하고 claude.ai에 다시 올리면 테스트 페이지에도 반영됩니다.
+
 ## Cloudflare에 배포
 
 처음 한 번만 Cloudflare 계정에 로그인하고 비밀값을 등록합니다.
@@ -124,6 +134,7 @@ ai-office/
 └── public/          # 화면 - Workers Assets로 제공
     ├── office.js    # 픽셀아트 사무실 (그리기, 걷기·말풍선 애니메이션)
     ├── app.js       # 대화창, 코토 업무 배분, 회의, 업무일지
+    ├── api.js       # 서버 연결 (테스트 페이지는 demo/api.js로 바꿔 끼움)
     ├── messenger.js # 사내 메신저 (채널, 질문 답장, 알림)
     └── fonts/       # 갈무리 픽셀 폰트
 ```
