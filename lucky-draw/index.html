@@ -14,6 +14,7 @@
     --accent-dark: #e4521d;
     --gold: #ffc23d;
     --line: #f0e3d6;
+    --neon: #2ef2ff;
   }
   * { box-sizing: border-box; }
   body {
@@ -39,7 +40,7 @@
   .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
   .tab {
     flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
-    background: #fff; cursor: pointer; font-size: 15px; color: var(--muted);
+    background: #fff; cursor: pointer; font-size: 15px; color: var(--muted); font-family: inherit;
   }
   .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   textarea, input[type="number"] {
@@ -56,10 +57,11 @@
   .count b { color: var(--accent); }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; cursor: pointer; }
   .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .sub-label { font-size: 14px; color: var(--muted); margin: 16px 0 8px; }
   .btn {
     display: block; width: 100%; padding: 18px; border: none; border-radius: 14px;
     background: var(--accent); color: #fff; font-size: 20px; font-weight: 800; cursor: pointer;
-    transition: transform .1s, background .2s;
+    transition: transform .1s, background .2s; font-family: inherit;
   }
   .btn:hover { background: var(--accent-dark); }
   .btn:active { transform: scale(0.98); }
@@ -84,8 +86,33 @@
   .history li:last-child { border-bottom: none; }
   .history time { color: var(--muted); font-size: 12px; margin-right: 8px; }
   .error { color: #d43c2c; font-size: 14px; margin-top: 10px; min-height: 18px; }
-  .hidden { display: none; }
-  canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  .hidden { display: none !important; }
+  canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+
+  /* 구슬 경주 화면 */
+  .race { position: fixed; inset: 0; background: #000; z-index: 20; }
+  .race canvas { width: 100%; height: 100%; display: block; }
+  .race-bar {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; gap: 8px; align-items: center;
+    background: rgba(20, 20, 24, .8); border: 1px solid rgba(46, 242, 255, .4);
+    border-radius: 999px; padding: 6px 8px 6px 16px; color: #fff; font-size: 14px; white-space: nowrap;
+  }
+  .race-bar button {
+    background: transparent; color: var(--neon); border: 1px solid rgba(46, 242, 255, .5);
+    border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .race-bar button:hover { background: rgba(46, 242, 255, .15); }
+  .race-result {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .55); padding: 20px;
+  }
+  .race-result .box {
+    background: #fff; border-radius: 20px; padding: 26px 22px 22px; width: 100%; max-width: 420px; text-align: center;
+    animation: pop .4s ease-out;
+  }
+  .race-result h3 { margin: 0 0 4px; font-size: 24px; }
+  .race-result p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 </style>
 </head>
 <body>
@@ -98,7 +125,7 @@
 
   <section class="card">
     <h2>1. 참여 번호 입력</h2>
-    <div class="tabs">
+    <div class="tabs" id="inputTabs">
       <button class="tab active" data-mode="list">번호 직접 입력</button>
       <button class="tab" data-mode="range">번호 범위로 입력</button>
     </div>
@@ -125,6 +152,20 @@
     <div class="row">
       <div class="field"><label>당첨 인원</label><input type="number" id="winnerCount" value="1" min="1"></div>
     </div>
+
+    <div class="sub-label">추첨 방식</div>
+    <div class="tabs" id="methodTabs">
+      <button class="tab active" data-method="race">🏁 구슬 경주</button>
+      <button class="tab" data-method="quick">⚡ 빠른 추첨</button>
+    </div>
+    <div id="raceOptions">
+      <div class="tabs" id="ruleTabs" style="margin-bottom: 0;">
+        <button class="tab active" data-rule="first">먼저 도착한 구슬 당첨</button>
+        <button class="tab" data-rule="last">끝까지 남은 구슬 당첨</button>
+      </div>
+      <div class="hint">번호가 적힌 구슬들이 장애물 코스를 굴러 내려가며 경주해요. 손님들과 같이 보기 좋아요!</div>
+    </div>
+
     <label class="check"><input type="checkbox" id="excludePrev" checked> 이전에 당첨된 번호는 제외하기</label>
   </section>
 
@@ -144,10 +185,34 @@
   </section>
 </div>
 
+<div class="race hidden" id="race">
+  <canvas id="raceCanvas"></canvas>
+  <div class="race-bar">
+    <span id="raceInfo"></span>
+    <button id="speedBtn">속도 1x</button>
+    <button id="stopBtn">✕ 중단</button>
+  </div>
+  <div class="race-result hidden" id="raceResult">
+    <div class="box">
+      <h3>🏆 당첨을 축하해요!</h3>
+      <p id="raceResultInfo"></p>
+      <div class="winners" id="raceWinners"></div>
+      <button class="btn" id="raceOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<script src="matter.min.js"></script>
+<script>
+  // 같은 폴더에 matter.min.js 가 없으면 인터넷(CDN)에서 불러오기
+  window.Matter || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"><\/script>');
+</script>
 <script>
   const $ = (id) => document.getElementById(id);
   const STORE_KEY = 'luckyDraw.v1';
   let mode = 'list';
+  let method = 'race';
+  let rule = 'first';
   let history = [];
 
   // 공정한 추첨을 위해 Math.random 대신 브라우저 암호학적 난수 사용
@@ -157,6 +222,16 @@
     let x;
     do { crypto.getRandomValues(buf); x = buf[0]; } while (x >= limit);
     return x % max;
+  }
+  const random = () => randomInt(1e9) / 1e9;
+
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   function getEntries() {
@@ -181,16 +256,18 @@
   }
 
   function save() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({
-      mode,
-      numbers: $('numbers').value,
-      rangeStart: $('rangeStart').value,
-      rangeEnd: $('rangeEnd').value,
-      winnerCount: $('winnerCount').value,
-      dedupe: $('dedupe').checked,
-      excludePrev: $('excludePrev').checked,
-      history,
-    })); } catch (_) {}
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        mode, method, rule,
+        numbers: $('numbers').value,
+        rangeStart: $('rangeStart').value,
+        rangeEnd: $('rangeEnd').value,
+        winnerCount: $('winnerCount').value,
+        dedupe: $('dedupe').checked,
+        excludePrev: $('excludePrev').checked,
+        history,
+      }));
+    } catch (_) {}
   }
 
   function load() {
@@ -205,15 +282,30 @@
       $('excludePrev').checked = d.excludePrev ?? true;
       history = d.history ?? [];
       setMode(d.mode ?? 'list');
+      setMethod(d.method ?? 'race');
+      setRule(d.rule ?? 'first');
     } catch (_) {}
   }
 
   function setMode(m) {
     mode = m;
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
+    document.querySelectorAll('#inputTabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
     $('mode-list').classList.toggle('hidden', m !== 'list');
     $('mode-range').classList.toggle('hidden', m !== 'range');
     updateCount();
+  }
+
+  function setMethod(m) {
+    method = m;
+    document.querySelectorAll('#methodTabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.method === m));
+    $('raceOptions').classList.toggle('hidden', m !== 'race');
+    save();
+  }
+
+  function setRule(r) {
+    rule = r;
+    document.querySelectorAll('#ruleTabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.rule === r));
+    save();
   }
 
   function renderHistory() {
@@ -227,9 +319,24 @@
       const li = document.createElement('li');
       const time = document.createElement('time');
       time.textContent = h.time;
-      li.append(time, `${h.total}명 중 → 🏆 ${h.winners.join(', ')}`);
+      const how = h.method === 'race' ? (h.rule === 'last' ? ' (구슬 경주·꼴찌)' : ' (구슬 경주)') : '';
+      li.append(time, `${h.total}명 중${how} → 🏆 ${h.winners.join(', ')}`);
       ul.appendChild(li);
     });
+  }
+
+  function winnerChip(label, i) {
+    const chip = document.createElement('div');
+    chip.className = 'winner';
+    chip.innerHTML = `<small>${i + 1}번째 당첨</small>`;
+    chip.append(label);
+    return chip;
+  }
+
+  function record(total, winners) {
+    history.push({ time: new Date().toLocaleString('ko-KR'), total, winners, method, rule });
+    renderHistory();
+    save();
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -246,6 +353,19 @@
     el.textContent = finalValue;
   }
 
+  async function quickDraw(pool, count) {
+    // 피셔-예이츠 방식으로 중복 없이 뽑기
+    const winners = shuffle(pool).slice(0, count);
+    $('winners').innerHTML = '';
+    for (let i = 0; i < winners.length; i++) {
+      await rollTo(pool, winners[i]);
+      $('winners').appendChild(winnerChip(winners[i], i));
+      confetti();
+      await sleep(500);
+    }
+    return winners;
+  }
+
   async function draw() {
     $('error').textContent = '';
     let pool = getEntries();
@@ -259,32 +379,25 @@
     if (!count || count < 1) { $('error').textContent = '당첨 인원을 1명 이상으로 입력해 주세요.'; return; }
     if (count > pool.length) { $('error').textContent = `참여 번호(${pool.length}개)보다 당첨 인원이 많아요.`; return; }
 
-    // 피셔-예이츠 방식으로 중복 없이 뽑기
-    const bag = [...pool];
-    const winners = [];
-    for (let i = 0; i < count; i++) {
-      const j = i + randomInt(bag.length - i);
-      [bag[i], bag[j]] = [bag[j], bag[i]];
-      winners.push(bag[i]);
+    if (method === 'race') {
+      if (!window.Matter) { $('error').textContent = '구슬 경주를 불러오지 못했어요. matter.min.js 파일이 같은 폴더에 있는지 확인하거나 빠른 추첨을 이용해 주세요.'; return; }
+      if (pool.length > Race.MAX) { $('error').textContent = `구슬 경주는 ${Race.MAX}명까지 가능해요. 인원이 많으면 빠른 추첨을 이용해 주세요.`; return; }
     }
 
     $('drawBtn').disabled = true;
-    $('winners').innerHTML = '';
-    for (let i = 0; i < winners.length; i++) {
-      await rollTo(pool, winners[i]);
-      const chip = document.createElement('div');
-      chip.className = 'winner';
-      chip.innerHTML = `<small>${i + 1}번째 당첨</small>`;
-      chip.append(winners[i]);
-      $('winners').appendChild(chip);
-      confetti();
-      await sleep(500);
+    let winners;
+    if (method === 'race') {
+      winners = await Race.run(pool, count, rule);
+      if (winners) {
+        $('stage').innerHTML = `<span class="placeholder">구슬 경주 결과 (${rule === 'last' ? '끝까지 남은 구슬' : '먼저 도착한 구슬'})</span>`;
+        $('winners').innerHTML = '';
+        winners.forEach((w, i) => $('winners').appendChild(winnerChip(w, i)));
+      }
+    } else {
+      winners = await quickDraw(pool, count);
     }
     $('drawBtn').disabled = false;
-
-    history.push({ time: new Date().toLocaleString('ko-KR'), total: pool.length, winners });
-    renderHistory();
-    save();
+    if (winners) record(pool.length, winners);
   }
 
   // 간단한 꽃가루 효과
@@ -312,10 +425,442 @@
     })();
   }
 
-  document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  // ───────────────────────── 구슬 경주 ─────────────────────────
+  // 구슬마다 크기·무게·탄성이 모두 같고, 출발 위치만 암호학적 난수로 섞어서 배치해요.
+  // 그 뒤로는 물리 엔진이 굴리는 대로 결과가 나오기 때문에 누구도 결과를 조작할 수 없어요.
+  const Race = (() => {
+    const MAX = 300;
+    const L = 40, R = 680, CX = 360;   // 코스 안쪽 벽의 x 좌표
+    const GATE_Y = 200;
+    const STEP = 1000 / 120;
+    const NEON = '#2ef2ff';
+
+    let M, engine, statics, spinners, balls, finished, finishY, topY;
+    let canvas, ctx, dpr, cw, ch, cam, speed, started, countdownEnd, ended, stopped;
+    let need, raceRule, resolveRun, raf, gate;
+
+    function seg(x1, y1, x2, y2, t = 14) {
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      const b = M.Bodies.rectangle((x1 + x2) / 2, (y1 + y2) / 2, len + t, t, {
+        isStatic: true, angle: Math.atan2(y2 - y1, x2 - x1), friction: 0.01, restitution: 0.3,
+      });
+      b.kind = 'wall';
+      b.line = [x1, y1, x2, y2];
+      statics.push(b);
+      return b;
+    }
+    function peg(x, y) {
+      const b = M.Bodies.circle(x, y, 6, { isStatic: true, restitution: 0.6 });
+      b.kind = 'peg';
+      statics.push(b);
+    }
+    function diamond(x, y) {
+      const b = M.Bodies.polygon(x, y, 4, 18, { isStatic: true, restitution: 0.9, angle: Math.PI / 4 });
+      b.kind = 'poly';
+      statics.push(b);
+    }
+    function spinner(x, y, len, spin) {
+      const b = M.Bodies.rectangle(x, y, len, 14, { isStatic: true, restitution: 0.5, friction: 0.05 });
+      b.kind = 'poly';
+      b.spin = spin;
+      spinners.push(b);
+      statics.push(b);
+    }
+    function pegField(y0, rows) {
+      for (let r = 0; r < rows; r++) {
+        const off = r % 2 ? 32 : 0;
+        for (let x = L + 32 + off; x < R - 20; x += 64) peg(x, y0 + r * 55);
+      }
+    }
+
+    function buildCourse() {
+      statics = [];
+      spinners = [];
+      // 출발 대기실 + 출발 게이트
+      seg(L, -4000, L, GATE_Y); seg(R, -4000, R, GATE_Y);
+      gate = seg(L, GATE_Y, R, GATE_Y);
+      gate.kind = 'gate';
+      // 첫 번째 깔때기
+      seg(L, GATE_Y, 280, 470); seg(R, GATE_Y, 440, 470);
+      seg(280, 470, 280, 540); seg(440, 470, 440, 540);
+      seg(280, 540, L, 740); seg(440, 540, R, 740);
+      seg(L, 740, L, 4250); seg(R, 740, R, 4250);
+      // 핀 구간
+      pegField(800, 11);
+      // 지그재그 미끄럼틀
+      seg(L, 1450, R - 120, 1530);
+      seg(R, 1620, L + 120, 1700);
+      seg(L, 1790, R - 120, 1870);
+      seg(R, 1960, L + 120, 2040);
+      // 회전 막대 구간
+      spinner(200, 2200, 230, 0.035); spinner(520, 2200, 230, -0.035);
+      spinner(360, 2400, 280, 0.03);
+      spinner(200, 2600, 230, -0.04); spinner(520, 2600, 230, 0.04);
+      // 다이아몬드 범퍼 구간
+      for (let r = 0; r < 4; r++) {
+        const off = r % 2 ? 55 : 0;
+        for (let x = L + 60 + off; x < R - 30; x += 110) diamond(x, 2780 + r * 100);
+      }
+      // 두 번째 깔때기 + 회전 날개
+      seg(L, 3180, 310, 3400); seg(R, 3180, 410, 3400);
+      seg(310, 3400, 310, 3450); seg(410, 3400, 410, 3450);
+      seg(310, 3450, L, 3650); seg(410, 3450, R, 3650);
+      spinner(360, 3530, 150, 0.06);
+      // 마지막 핀 구간 + 결승 깔때기
+      pegField(3720, 8);
+      seg(L, 4180, 300, 4400); seg(R, 4180, 420, 4400);
+      seg(300, 4400, 300, 4520); seg(420, 4400, 420, 4520);
+      finishY = 4470;
+    }
+
+    function spawnBalls(entries) {
+      const r = entries.length > 120 ? 7 : 9;
+      const gap = 2 * r + 6;
+      const perRow = Math.floor((R - L - 30) / gap);
+      const order = shuffle(entries.map((label, i) => ({ label, i })));
+      balls = order.map((e, k) => {
+        const row = Math.floor(k / perRow);
+        const col = k % perRow;
+        const x = L + 20 + r + col * gap + random() * 4;
+        const y = GATE_Y - 20 - r - row * gap;
+        const b = M.Bodies.circle(x, y, r, { restitution: 0.4, friction: 0.01, frictionAir: 0.012, density: 0.002 });
+        b.label = e.label;
+        b.color = `hsl(${(e.i * 137.5) % 360}, 90%, 62%)`;
+        b.r = r;
+        b.checkY = y;
+        b.checkT = 0;
+        return b;
+      });
+      topY = Math.min(...balls.map((b) => b.position.y)) - 60;
+    }
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      cw = canvas.clientWidth;
+      ch = canvas.clientHeight;
+      canvas.width = cw * dpr;
+      canvas.height = ch * dpr;
+    }
+
+    let simTime = 0;
+    function step() {
+      for (const s of spinners) M.Body.setAngle(s, s.angle + s.spin / 2, true);
+      M.Engine.update(engine, STEP);
+      simTime += STEP;
+      for (const b of balls) {
+        if (b.done) continue;
+        // 너무 빨라서 벽을 뚫지 않도록 속도 제한
+        const v = b.velocity, sp = Math.hypot(v.x, v.y);
+        if (sp > 16) M.Body.setVelocity(b, { x: v.x * 16 / sp, y: v.y * 16 / sp });
+        // 만약 코스 밖으로 튕겨 나가면 가운데로 되돌리기
+        if (b.position.x < L - 30 || b.position.x > R + 30) {
+          M.Body.setPosition(b, { x: CX, y: b.position.y });
+          M.Body.setVelocity(b, { x: 0, y: 0 });
+        }
+        if (!started) continue;
+        if (b.position.y > finishY) {
+          b.done = true;
+          finished.push(b);
+          M.Composite.remove(engine.world, b);
+          continue;
+        }
+        // 어딘가에 끼어서 2초 넘게 못 내려가면 살짝 흔들어주기
+        if (simTime - b.checkT > 2000) {
+          if (b.position.y - b.checkY < 15) {
+            M.Body.setVelocity(b, { x: (random() - 0.5) * 8, y: -3 });
+          }
+          b.checkY = b.position.y;
+          b.checkT = simTime;
+        }
+      }
+      if (started && !ended) checkEnd();
+    }
+
+    function checkEnd() {
+      let winners = null;
+      if (raceRule === 'first' && finished.length >= need) {
+        winners = finished.slice(0, need);
+      } else if (raceRule === 'last') {
+        const left = balls.filter((b) => !b.done);
+        if (left.length <= need) winners = left.sort((a, b) => a.position.y - b.position.y);
+      }
+      if (!winners) return;
+      ended = true;
+      winners.forEach((b) => { b.win = true; });
+      setTimeout(() => showResult(winners), 1200);
+    }
+
+    function showResult(winners) {
+      if (stopped) return;
+      $('raceResultInfo').textContent = raceRule === 'last'
+        ? `${balls.length}개 구슬 중 끝까지 남은 ${winners.length}개`
+        : `${balls.length}개 구슬 중 먼저 도착한 ${winners.length}개`;
+      const box = $('raceWinners');
+      box.innerHTML = '';
+      winners.forEach((b, i) => box.appendChild(winnerChip(b.label, i)));
+      $('raceResult').classList.remove('hidden');
+      confetti();
+      $('raceOk').onclick = () => close(winners.map((b) => b.label));
+    }
+
+    function close(result) {
+      stopped = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+      M.Engine.clear(engine);
+      $('race').classList.add('hidden');
+      $('raceResult').classList.add('hidden');
+      document.body.style.overflow = '';
+      resolveRun(result);
+    }
+
+    function cameraTarget() {
+      const left = balls.filter((b) => !b.done);
+      if (!started || !left.length) return null;
+      // 먼저 도착 모드는 선두를, 꼴찌 모드는 맨 뒤 구슬을 따라가요
+      return left.reduce((a, b) => (raceRule === 'last'
+        ? (b.position.y < a.position.y ? b : a)
+        : (b.position.y > a.position.y ? b : a)));
+    }
+
+    function render(now) {
+      const scale = Math.min(ch / 450, cw / 360);
+      const viewW = cw / scale, viewH = ch / scale;
+      const t = cameraTarget();
+      const ty = t ? t.position.y : (started ? cam.y : GATE_Y - 120);
+      const tx = t ? t.position.x : CX;
+      cam.y += (ty - cam.y) * 0.08;
+      if (viewW >= R - L + 80) cam.x = CX;
+      else cam.x += (Math.max(L - 40 + viewW / 2, Math.min(R + 40 - viewW / 2, tx)) - cam.x) * 0.08;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cw, ch);
+
+      ctx.save();
+      ctx.translate(cw / 2, ch / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-cam.x, -cam.y);
+      const y0 = cam.y - viewH / 2 - 100, y1 = cam.y + viewH / 2 + 100;
+      const visible = (b) => b.bounds.max.y > y0 && b.bounds.min.y < y1;
+
+      // 결승선
+      if (finishY > y0 && finishY < y1) {
+        for (let x = 300, k = 0; x < 420; x += 10, k++) {
+          ctx.fillStyle = k % 2 ? '#fff' : '#333';
+          ctx.fillRect(x, finishY - 5, 10, 5);
+          ctx.fillStyle = k % 2 ? '#333' : '#fff';
+          ctx.fillRect(x, finishY, 10, 5);
+        }
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('FINISH', CX, finishY + 30);
+      }
+
+      // 벽 (흰색 네온)
+      ctx.lineCap = 'round';
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      for (const b of statics) {
+        if (b.kind !== 'wall' || !visible(b)) continue;
+        const [x1, yA, x2, yB] = b.line;
+        ctx.moveTo(x1, yA);
+        ctx.lineTo(x2, yB);
+      }
+      ctx.stroke();
+
+      // 출발 게이트
+      if (!started) {
+        ctx.setLineDash([12, 10]);
+        ctx.strokeStyle = '#ffc23d';
+        ctx.shadowColor = '#ffc23d';
+        ctx.beginPath();
+        ctx.moveTo(L, GATE_Y);
+        ctx.lineTo(R, GATE_Y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 장애물 (하늘색 네온)
+      ctx.shadowColor = NEON;
+      ctx.fillStyle = NEON;
+      for (const b of statics) {
+        if (!visible(b) || b.kind === 'wall' || b.kind === 'gate') continue;
+        ctx.beginPath();
+        if (b.kind === 'peg') {
+          ctx.arc(b.position.x, b.position.y, 6, 0, Math.PI * 2);
+        } else {
+          b.vertices.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y)));
+          ctx.closePath();
+        }
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+
+      // 구슬 + 번호
+      ctx.textAlign = 'left';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000';
+      for (const b of balls) {
+        if (b.done || b.position.y < y0 || b.position.y > y1) continue;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.position.x, b.position.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        if (b === t) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 3;
+        }
+        ctx.font = `bold ${b.r + 4}px sans-serif`;
+        ctx.strokeText(b.label, b.position.x + b.r - 2, b.position.y + b.r + 10);
+        ctx.fillText(b.label, b.position.x + b.r - 2, b.position.y + b.r + 10);
+      }
+      ctx.restore();
+
+      drawMinimap(viewH);
+      drawRanking();
+
+      // 출발 카운트다운
+      if (!started) {
+        const n = Math.ceil((countdownEnd - now) / 1000);
+        ctx.fillStyle = '#ffc23d';
+        ctx.font = `900 ${Math.min(cw, ch) * 0.25}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#ffc23d';
+        ctx.shadowBlur = 30;
+        ctx.fillText(n > 0 ? n : 'GO!', cw / 2, ch / 2);
+        ctx.shadowBlur = 0;
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
+
+    function drawMinimap(viewH) {
+      const narrow = cw < 600;
+      const h = narrow ? ch * 0.45 : ch - 24;
+      const s = h / (finishY + 60 - topY);
+      const w = (R - L + 40) * s;
+      const ox = 12 - (L - 20) * s, oy = 12 - topY * s;
+      ctx.fillStyle = 'rgba(30, 30, 34, .75)';
+      ctx.strokeStyle = 'rgba(80, 200, 120, .6)';
+      ctx.lineWidth = 1;
+      ctx.fillRect(12, 12, w, h);
+      ctx.strokeRect(12, 12, w, h);
+      ctx.strokeStyle = 'rgba(255, 255, 255, .7)';
+      ctx.beginPath();
+      for (const b of statics) {
+        if (b.kind !== 'wall') continue;
+        const [x1, yA, x2, yB] = b.line;
+        ctx.moveTo(ox + x1 * s, oy + Math.max(yA, topY) * s);
+        ctx.lineTo(ox + x2 * s, oy + Math.max(yB, topY) * s);
+      }
+      ctx.stroke();
+      ctx.fillStyle = NEON;
+      for (const b of statics) {
+        if (b.kind === 'peg' || b.kind === 'poly') ctx.fillRect(ox + b.position.x * s - 1, oy + b.position.y * s - 1, 2, 2);
+      }
+      for (const b of balls) {
+        if (b.done) continue;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(ox + b.position.x * s - 1.5, oy + b.position.y * s - 1.5, 3, 3);
+      }
+      ctx.strokeStyle = '#ffc23d';
+      ctx.strokeRect(12, oy + (cam.y - viewH / 2) * s, w, viewH * s);
+    }
+
+    function drawRanking() {
+      const narrow = cw < 600;
+      const lineH = narrow ? 15 : 18;
+      const order = [...finished, ...balls.filter((b) => !b.done).sort((a, b) => b.position.y - a.position.y)];
+      const maxLines = Math.max(3, Math.floor((narrow ? ch * 0.45 : ch - 70) / lineH) - 1);
+      const lines = order.slice(0, order.length > maxLines ? maxLines - 1 : maxLines).map((b, i) => ({
+        text: `${b.done ? '✓ ' : ''}${b.label}  #${i + 1}`, color: b.color, win: b.win,
+      }));
+      if (order.length > maxLines) lines.push({ text: `… 외 ${order.length - maxLines + 1}개`, color: '#aaa' });
+      ctx.font = `bold ${narrow ? 12 : 14}px sans-serif`;
+      const head = `완주 ${finished.length} / ${balls.length}`;
+      const w = Math.max(ctx.measureText(head).width, ...lines.map((l) => ctx.measureText((l.win ? '🏆 ' : '') + l.text).width)) + 20;
+      const x = cw - w - 12;
+      ctx.fillStyle = 'rgba(30, 30, 34, .75)';
+      ctx.fillRect(x, 12, w, lineH * (lines.length + 1) + 12);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(head, cw - 22, 12 + lineH);
+      lines.forEach((l, i) => {
+        const y = 12 + lineH * (i + 2);
+        if (l.win) {
+          ctx.fillStyle = 'rgba(255, 194, 61, .3)';
+          ctx.fillRect(x + 4, y - lineH + 4, w - 8, lineH);
+        }
+        ctx.fillStyle = l.color;
+        ctx.fillText((l.win ? '🏆 ' : '') + l.text, cw - 22, y);
+      });
+    }
+
+    function frame(now) {
+      if (stopped) return;
+      if (!started && now >= countdownEnd) {
+        started = true;
+        M.Composite.remove(engine.world, gate);
+        for (const b of balls) b.checkT = simTime;
+      }
+      const steps = started ? 2 * speed : 2;
+      for (let i = 0; i < steps; i++) step();
+      render(now);
+      raf = requestAnimationFrame(frame);
+    }
+
+    function run(entries, count, ruleName) {
+      M = window.Matter;
+      need = count;
+      raceRule = ruleName;
+      finished = [];
+      started = false;
+      ended = false;
+      stopped = false;
+      speed = 1;
+      simTime = 0;
+      buildCourse();
+      spawnBalls(entries);
+      engine = M.Engine.create({ positionIterations: 8, velocityIterations: 6 });
+      M.Composite.add(engine.world, [...statics, ...balls]);
+
+      canvas = $('raceCanvas');
+      ctx = canvas.getContext('2d');
+      $('race').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      resize();
+      window.addEventListener('resize', resize);
+      cam = { x: CX, y: GATE_Y - 120 };
+      countdownEnd = performance.now() + 3000;
+      $('raceInfo').textContent = `${ruleName === 'last' ? '끝까지 남은' : '먼저 도착한'} ${count}명 당첨`;
+      $('speedBtn').textContent = '속도 1x';
+      $('speedBtn').onclick = () => {
+        speed = speed >= 4 ? 1 : speed * 2;
+        $('speedBtn').textContent = `속도 ${speed}x`;
+      };
+      $('stopBtn').onclick = () => close(null);
+      raf = requestAnimationFrame(frame);
+      return new Promise((resolve) => { resolveRun = resolve; });
+    }
+
+    return { run, MAX };
+  })();
+
+  document.querySelectorAll('#inputTabs .tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  document.querySelectorAll('#methodTabs .tab').forEach((t) => t.addEventListener('click', () => setMethod(t.dataset.method)));
+  document.querySelectorAll('#ruleTabs .tab').forEach((t) => t.addEventListener('click', () => setRule(t.dataset.rule)));
   ['numbers', 'rangeStart', 'rangeEnd', 'winnerCount'].forEach((id) => $(id).addEventListener('input', updateCount));
   ['dedupe', 'excludePrev'].forEach((id) => $(id).addEventListener('change', updateCount));
   $('drawBtn').addEventListener('click', draw);
+
   // 실수 방지: 한 번 누르면 확인 문구로 바뀌고, 다시 눌러야 지워짐
   let clearArmed = false;
   $('clearBtn').addEventListener('click', () => {
