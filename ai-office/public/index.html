@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>홈페이션 AI 오피스</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🏢</span>
+      <div>
+        <h1>홈페이션 AI 오피스</h1>
+        <p class="sub">AI 직원에게 업무를 맡겨 보세요</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="status" class="status">연결 확인 중…</span>
+      <button id="meetingBtn" class="btn primary">👥 회의 소집</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="floor" id="floor" aria-label="사무실 배치도"></section>
+
+    <aside class="log">
+      <h2>📒 오늘의 업무 일지</h2>
+      <ul id="logList" class="log-list"><li class="empty">아직 맡긴 업무가 없어요.</li></ul>
+    </aside>
+  </main>
+
+  <!-- 직원과 1:1 대화 -->
+  <div class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="who">
+        <span class="avatar" id="dAvatar"></span>
+        <div>
+          <strong id="dName"></strong>
+          <span class="role" id="dTitle"></span>
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button class="btn ghost small" id="clearBtn" title="대화 기록 지우기">🧹 새 업무</button>
+        <button class="icon-btn" id="closeBtn" aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="messages" id="messages"></div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="3" placeholder="업무를 자세히 적을수록 결과가 좋아요. (Enter 전송, Shift+Enter 줄바꿈)"></textarea>
+      <button class="btn primary" id="sendBtn" type="submit">맡기기</button>
+    </form>
+  </div>
+
+  <!-- 회의실 -->
+  <div class="modal" id="meeting" aria-hidden="true">
+    <div class="modal-card">
+      <div class="drawer-head">
+        <div class="who"><span class="avatar">👥</span><strong>회의실</strong></div>
+        <button class="icon-btn" id="meetingClose" aria-label="닫기">✕</button>
+      </div>
+      <form id="meetingForm" class="meeting-form">
+        <label class="field-label">회의 안건</label>
+        <textarea id="meetingTopic" rows="3" placeholder="예: 동네 베이커리 홈페이지 신규 제작 의뢰가 들어왔어. 각자 맡은 분야에서 첫 제안을 해줘."></textarea>
+        <label class="field-label">참석자 <span class="hint">(발언 순서대로, 앞사람 의견을 참고해서 말해요)</span></label>
+        <div id="attendees" class="attendees"></div>
+        <button class="btn primary" type="submit" id="meetingStart">회의 시작</button>
+      </form>
+      <div id="minutes" class="messages minutes"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
