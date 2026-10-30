@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리뷰 이벤트 랜덤 추첨기</title>
+<style>
+  :root {
+    --bg: #fff8f1;
+    --card: #ffffff;
+    --ink: #2b2118;
+    --muted: #8a7b6d;
+    --accent: #ff6b35;
+    --accent-dark: #e4521d;
+    --gold: #ffc23d;
+    --line: #f0e3d6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { margin: 0 0 6px; font-size: 28px; }
+  header p { margin: 0; color: var(--muted); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 18px rgba(120, 70, 20, 0.06);
+  }
+  .card h2 { margin: 0 0 14px; font-size: 18px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: #fff; cursor: pointer; font-size: 15px; color: var(--muted);
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  textarea, input[type="number"] {
+    width: 100%; font-size: 16px; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: #fffdfb; color: var(--ink); font-family: inherit;
+  }
+  textarea { min-height: 140px; resize: vertical; }
+  textarea:focus, input:focus { outline: 2px solid var(--gold); border-color: transparent; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .row label { font-size: 14px; color: var(--muted); }
+  .row .field { flex: 1; min-width: 120px; }
+  .count { margin-top: 10px; font-size: 14px; }
+  .count b { color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .btn {
+    display: block; width: 100%; padding: 18px; border: none; border-radius: 14px;
+    background: var(--accent); color: #fff; font-size: 20px; font-weight: 800; cursor: pointer;
+    transition: transform .1s, background .2s;
+  }
+  .btn:hover { background: var(--accent-dark); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { background: #d9c9ba; cursor: not-allowed; }
+  .btn.ghost { background: #fff; color: var(--muted); border: 1px solid var(--line); font-size: 14px; padding: 10px; font-weight: 500; }
+  .stage {
+    text-align: center; padding: 30px 10px; border-radius: 16px;
+    background: linear-gradient(135deg, #fff1e6, #fff9e8);
+    margin-bottom: 16px; min-height: 130px; display: flex; align-items: center; justify-content: center;
+  }
+  .rolling { font-size: 64px; font-weight: 900; letter-spacing: 2px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .stage .placeholder { color: var(--muted); }
+  .winners { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 16px; }
+  .winner {
+    background: var(--gold); color: var(--ink); border-radius: 14px; padding: 12px 18px;
+    font-size: 26px; font-weight: 900; animation: pop .4s ease-out; font-variant-numeric: tabular-nums;
+  }
+  .winner small { display: block; font-size: 11px; font-weight: 600; opacity: .7; }
+  @keyframes pop { 0% { transform: scale(.3); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+  .history { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  .history li { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .history li:last-child { border-bottom: none; }
+  .history time { color: var(--muted); font-size: 12px; margin-right: 8px; }
+  .error { color: #d43c2c; font-size: 14px; margin-top: 10px; min-height: 18px; }
+  .hidden { display: none; }
+  canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="wrap">
+  <header>
+    <h1>🎁 리뷰 이벤트 랜덤 추첨기</h1>
+    <p>참여 번호를 입력하고 버튼만 누르면 공정하게 추첨해요</p>
+  </header>
+
+  <section class="card">
+    <h2>1. 참여 번호 입력</h2>
+    <div class="tabs">
+      <button class="tab active" data-mode="list">번호 직접 입력</button>
+      <button class="tab" data-mode="range">번호 범위로 입력</button>
+    </div>
+
+    <div id="mode-list">
+      <textarea id="numbers" placeholder="예) 1234, 5678, 9012&#10;또는 한 줄에 하나씩 입력&#10;(전화번호 뒷자리, 영수증 번호 등)"></textarea>
+      <div class="hint">쉼표, 띄어쓰기, 줄바꿈으로 구분해요. 엑셀에서 복사해 붙여넣어도 됩니다.</div>
+      <label class="check"><input type="checkbox" id="dedupe" checked> 같은 번호는 한 번만 참여 (중복 제거)</label>
+    </div>
+
+    <div id="mode-range" class="hidden">
+      <div class="row">
+        <div class="field"><label>시작 번호</label><input type="number" id="rangeStart" value="1" min="0"></div>
+        <div class="field"><label>끝 번호</label><input type="number" id="rangeEnd" value="100" min="0"></div>
+      </div>
+      <div class="hint">예) 쿠폰 1번 ~ 100번 중에서 추첨</div>
+    </div>
+
+    <div class="count">참여 인원: <b id="total">0</b>명</div>
+  </section>
+
+  <section class="card">
+    <h2>2. 추첨 설정</h2>
+    <div class="row">
+      <div class="field"><label>당첨 인원</label><input type="number" id="winnerCount" value="1" min="1"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="excludePrev" checked> 이전에 당첨된 번호는 제외하기</label>
+  </section>
+
+  <section class="card">
+    <div class="stage" id="stage"><span class="placeholder">추첨 버튼을 눌러주세요</span></div>
+    <div class="winners" id="winners"></div>
+    <button class="btn" id="drawBtn">🎉 추첨하기</button>
+    <div class="error" id="error"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+      <h2 style="margin: 0;">당첨 기록</h2>
+      <button class="btn ghost" id="clearBtn" style="width: auto;">기록 지우기</button>
+    </div>
+    <ul class="history" id="history"><li style="color: var(--muted);">아직 추첨 기록이 없어요</li></ul>
+  </section>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const STORE_KEY = 'luckyDraw.v1';
+  let mode = 'list';
+  let history = [];
+
+  // 공정한 추첨을 위해 Math.random 대신 브라우저 암호학적 난수 사용
+  function randomInt(max) {
+    const buf = new Uint32Array(1);
+    const limit = Math.floor(0x100000000 / max) * max;
+    let x;
+    do { crypto.getRandomValues(buf); x = buf[0]; } while (x >= limit);
+    return x % max;
+  }
+
+  function getEntries() {
+    if (mode === 'range') {
+      const s = parseInt($('rangeStart').value, 10);
+      const e = parseInt($('rangeEnd').value, 10);
+      if (isNaN(s) || isNaN(e) || e < s) return [];
+      if (e - s > 100000) return [];
+      return Array.from({ length: e - s + 1 }, (_, i) => String(s + i));
+    }
+    const list = $('numbers').value.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean);
+    return $('dedupe').checked ? [...new Set(list)] : list;
+  }
+
+  function pastWinners() {
+    return new Set(history.flatMap((h) => h.winners));
+  }
+
+  function updateCount() {
+    $('total').textContent = getEntries().length.toLocaleString();
+    save();
+  }
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({
+      mode,
+      numbers: $('numbers').value,
+      rangeStart: $('rangeStart').value,
+      rangeEnd: $('rangeEnd').value,
+      winnerCount: $('winnerCount').value,
+      dedupe: $('dedupe').checked,
+      excludePrev: $('excludePrev').checked,
+      history,
+    })); } catch (_) {}
+  }
+
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (!d) return;
+      $('numbers').value = d.numbers ?? '';
+      $('rangeStart').value = d.rangeStart ?? 1;
+      $('rangeEnd').value = d.rangeEnd ?? 100;
+      $('winnerCount').value = d.winnerCount ?? 1;
+      $('dedupe').checked = d.dedupe ?? true;
+      $('excludePrev').checked = d.excludePrev ?? true;
+      history = d.history ?? [];
+      setMode(d.mode ?? 'list');
+    } catch (_) {}
+  }
+
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
+    $('mode-list').classList.toggle('hidden', m !== 'list');
+    $('mode-range').classList.toggle('hidden', m !== 'range');
+    updateCount();
+  }
+
+  function renderHistory() {
+    const ul = $('history');
+    if (!history.length) {
+      ul.innerHTML = '<li style="color: var(--muted);">아직 추첨 기록이 없어요</li>';
+      return;
+    }
+    ul.innerHTML = '';
+    [...history].reverse().forEach((h) => {
+      const li = document.createElement('li');
+      const time = document.createElement('time');
+      time.textContent = h.time;
+      li.append(time, `${h.total}명 중 → 🏆 ${h.winners.join(', ')}`);
+      ul.appendChild(li);
+    });
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function rollTo(pool, finalValue) {
+    const stage = $('stage');
+    stage.innerHTML = '<span class="rolling"></span>';
+    const el = stage.firstChild;
+    // 처음엔 빠르게, 점점 느려지는 슬롯머신 연출
+    for (let i = 0; i < 22; i++) {
+      el.textContent = pool[randomInt(pool.length)];
+      await sleep(30 + i * i * 0.5);
+    }
+    el.textContent = finalValue;
+  }
+
+  async function draw() {
+    $('error').textContent = '';
+    let pool = getEntries();
+    if ($('excludePrev').checked) {
+      const prev = pastWinners();
+      pool = pool.filter((n) => !prev.has(n));
+    }
+    const count = parseInt($('winnerCount').value, 10);
+
+    if (!pool.length) { $('error').textContent = '추첨할 번호가 없어요. 번호를 입력해 주세요.'; return; }
+    if (!count || count < 1) { $('error').textContent = '당첨 인원을 1명 이상으로 입력해 주세요.'; return; }
+    if (count > pool.length) { $('error').textContent = `참여 번호(${pool.length}개)보다 당첨 인원이 많아요.`; return; }
+
+    // 피셔-예이츠 방식으로 중복 없이 뽑기
+    const bag = [...pool];
+    const winners = [];
+    for (let i = 0; i < count; i++) {
+      const j = i + randomInt(bag.length - i);
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+      winners.push(bag[i]);
+    }
+
+    $('drawBtn').disabled = true;
+    $('winners').innerHTML = '';
+    for (let i = 0; i < winners.length; i++) {
+      await rollTo(pool, winners[i]);
+      const chip = document.createElement('div');
+      chip.className = 'winner';
+      chip.innerHTML = `<small>${i + 1}번째 당첨</small>`;
+      chip.append(winners[i]);
+      $('winners').appendChild(chip);
+      confetti();
+      await sleep(500);
+    }
+    $('drawBtn').disabled = false;
+
+    history.push({ time: new Date().toLocaleString('ko-KR'), total: pool.length, winners });
+    renderHistory();
+    save();
+  }
+
+  // 간단한 꽃가루 효과
+  function confetti() {
+    const c = $('confetti');
+    const ctx = c.getContext('2d');
+    c.width = innerWidth; c.height = innerHeight;
+    const colors = ['#ff6b35', '#ffc23d', '#4ecdc4', '#ff4f81', '#7b61ff'];
+    const parts = Array.from({ length: 120 }, () => ({
+      x: c.width / 2, y: c.height / 3,
+      vx: (Math.random() - 0.5) * 14, vy: Math.random() * -12 - 4,
+      s: Math.random() * 6 + 4, color: colors[Math.floor(Math.random() * colors.length)], r: Math.random() * 6,
+    }));
+    let frame = 0;
+    (function tick() {
+      ctx.clearRect(0, 0, c.width, c.height);
+      parts.forEach((p) => {
+        p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.r += 0.1;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      });
+      if (++frame < 90) requestAnimationFrame(tick);
+      else ctx.clearRect(0, 0, c.width, c.height);
+    })();
+  }
+
+  document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  ['numbers', 'rangeStart', 'rangeEnd', 'winnerCount'].forEach((id) => $(id).addEventListener('input', updateCount));
+  ['dedupe', 'excludePrev'].forEach((id) => $(id).addEventListener('change', updateCount));
+  $('drawBtn').addEventListener('click', draw);
+  // 실수 방지: 한 번 누르면 확인 문구로 바뀌고, 다시 눌러야 지워짐
+  let clearArmed = false;
+  $('clearBtn').addEventListener('click', () => {
+    if (!clearArmed) {
+      clearArmed = true;
+      $('clearBtn').textContent = '정말 지울까요? 한 번 더 클릭';
+      setTimeout(() => { clearArmed = false; $('clearBtn').textContent = '기록 지우기'; }, 3000);
+      return;
+    }
+    clearArmed = false;
+    $('clearBtn').textContent = '기록 지우기';
+    history = [];
+    renderHistory();
+    save();
+  });
+
+  load();
+  updateCount();
+  renderHistory();
+</script>
+</body>
+</html>
