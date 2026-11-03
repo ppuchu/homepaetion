@@ -1,0 +1,152 @@
+/* 핑크 파스텔 윈도우 테마 — ai-office 템플릿(갓생맘) 화면 스타일을 입힌 덮어쓰기 파일.
+   style.css 뒤에 불러오며, 색·테두리·그림자만 바꾸고 동작·배치는 건드리지 않아요.
+   되돌리려면 index.html에서 이 파일 한 줄만 빼면 됩니다. */
+
+:root:root:root {
+  --pink: #ff8fc0;
+  --pink-deep: #ff5fa8;
+  --pink-bg: #ffe6f2;
+  --pink-line: #ffb9d9;
+  --lav: #c9b8ff;
+  --mint: #b8f0dd;
+  --yellow: #fff3b0;
+  --shade: 6px 6px 0 rgba(255, 95, 168, 0.25);
+
+  --bg: #ffe6f2;
+  --panel: #ffffff;
+  --text: #4a2b3c;
+  --muted: #8a6076;
+  --ink: #4a2b3c;
+  --line: #4a2b3c;
+  --soft: #ffd3e8;
+  --accent: #ff5fa8;
+  --accent-ink: #ffffff;
+  --chief: #ffd84d;
+  --bubble-me: #ff5fa8;
+  --bubble-ai: #ffffff;
+  --code-bg: #fff3f9;
+  --tag-report: #b8f0dd;
+  --tag-question: #fff3b0;
+  --tag-assign: #e3d9ff;
+  --warn-bg: #fff3b0;
+  --warn-fg: #6b4a10;
+  --err-bg: #ffe3e3;
+  --err-fg: #a12020;
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--pink-bg);
+  background-image: radial-gradient(var(--pink-line) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+::selection { background: var(--pink); color: #fff; }
+
+/* ---------- 상단바: 둥근 흰 창 ---------- */
+.topbar {
+  max-width: 1500px;
+  margin: 20px auto 0;
+  width: calc(100% - 32px);
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-bottom-width: 2px;
+  border-radius: 14px;
+  box-shadow: var(--shade);
+}
+.brand .logo {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border: 2px solid var(--ink); border-radius: 8px;
+  background: var(--pink); font-size: 22px;
+  box-shadow: 2px 2px 0 rgba(74, 43, 60, .25);
+}
+.brand .sub { opacity: 1; color: var(--muted); }
+.status { background: var(--pink-bg); border: 2px solid var(--pink-line); border-radius: 999px; color: var(--ink); }
+
+/* ---------- 버튼: 둥근 모서리 + 분홍 그림자 ---------- */
+.btn {
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 3px 3px 0 rgba(255, 95, 168, .35);
+}
+.btn:hover { box-shadow: 4px 4px 0 rgba(255, 95, 168, .45); }
+.btn:active { box-shadow: 1px 1px 0 rgba(255, 95, 168, .45); }
+.btn.primary { background: var(--pink-deep); color: #fff; }
+.btn.ghost { background: #fff; }
+.icon-btn { border-radius: 8px; }
+.icon-btn:hover { background: var(--pink-bg); }
+.msg-badge { background: var(--pink-deep); border-radius: 999px; }
+
+/* ---------- 층 탭: 노란 선택 탭 ---------- */
+.floor-tab {
+  border: 2px solid var(--ink);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: #fff;
+}
+.floor-tab[aria-selected="true"] { background: var(--yellow); color: var(--ink); }
+.floor-tab .badge { background: var(--pink); color: #fff; border-radius: 999px; }
+
+/* ---------- 사무실 액자: 분홍 보라 윈도우 ---------- */
+.office-scroll {
+  background: #3a2433;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: var(--shade);
+}
+.room-label { background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; padding: 2px 6px; }
+.room-label.chief { background: var(--chief); color: var(--ink); }
+.name-tag { background: rgba(255, 255, 255, .92); color: var(--ink); border-radius: 4px; border-bottom: 2px solid var(--agent-color); }
+.name-tag.chief { background: var(--chief); }
+.name-tag.working { background: var(--agent-color); color: var(--ink); }
+
+/* ---------- 직원 목록 카드 ---------- */
+.roster-group h3 { color: var(--pink-deep); }
+.staff {
+  border: 2px solid var(--ink);
+  border-left: 8px solid var(--agent-color);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 rgba(255, 95, 168, .3);
+}
+.staff:hover { box-shadow: 4px 4px 0 rgba(255, 95, 168, .45); }
+.staff.chief { background: color-mix(in srgb, var(--chief) 25%, #fff); }
+
+/* ---------- 메신저: 윈도우 창 (제목줄 분홍→보라 그라데이션) ---------- */
+.messenger {
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: var(--shade);
+  background: #fff;
+}
+.ms-side { background: linear-gradient(180deg, var(--pink), var(--lav)); color: #fff; }
+.ms-title { text-shadow: 0 1px rgba(74, 43, 60, .25); }
+.ms-ch { color: #fff; border-radius: 8px; }
+.ms-ch:hover { background: rgba(255, 255, 255, .25); }
+.ms-ch.active { background: #fff; color: var(--pink-deep); }
+.ms-unread { background: var(--pink-deep); border-radius: 999px; }
+.ms-log-btn { background: var(--yellow); color: var(--ink); }
+.ms-head { border-bottom: 2px solid var(--ink); background: linear-gradient(90deg, #fff, var(--pink-bg)); }
+.ms-tag { border: 1.5px solid var(--ink); border-radius: 999px; }
+.ms-composer { border-top: 2px solid var(--ink); background: var(--pink-bg); }
+.ms-to, .ms-row textarea { border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.ms-row textarea:focus { outline: 3px solid rgba(255, 95, 168, .35); }
+.ms-reply { border-radius: 8px; }
+.ms-msg.me .ms-text { color: var(--pink-deep); }
+.kind-question .ms-text { border-left-color: var(--pink); }
+
+/* ---------- 서랍(직원 대화·회의실): 윈도우 제목줄 ---------- */
+.drawer { border-left: 2px solid var(--ink); background: var(--pink-bg); }
+.drawer-head {
+  border-bottom: 2px solid var(--ink);
+  background: linear-gradient(90deg, var(--pink), var(--lav));
+  color: #fff;
+  text-shadow: 0 1px rgba(74, 43, 60, .25);
+}
+.drawer-head .role { color: rgba(255, 255, 255, .85); }
+.drawer-head .icon-btn { color: #fff; border: 1.5px solid #fff; border-radius: 6px; background: rgba(255, 255, 255, .15); width: 30px; height: 28px; font-size: 14px; }
+.drawer-head .icon-btn:hover { background: rgba(255, 255, 255, .35); }
+.chips { border-bottom: 2px solid var(--pink-line); }
+.chip { border-radius: 999px; background: var(--yellow); border: 2px solid var(--ink); }
+.px-box { border: 2px solid var(--line); border-radius: 12px; box-shadow: var(--shade); }

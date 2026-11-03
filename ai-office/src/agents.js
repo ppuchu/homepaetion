@@ -10,6 +10,8 @@ import insightGuide from "./guidelines/insight.md";
 import dictionaryGuide from "./guidelines/dictionary.md";
 import financeGuide from "./guidelines/finance.md";
 import securityGuide from "./guidelines/security.md";
+import referenceGuide from "./guidelines/reference.md";
+import templateGuide from "./guidelines/template.md";
 import paljaGuide from "./guidelines/palja.md";
 import paljaDevGuide from "./guidelines/palja-dev.md";
 import paljaShelfGuide from "./guidelines/palja-shelf.md";
@@ -24,6 +26,7 @@ const COMPANY = `당신은 대표님의 AI 조직 '코토'에 속한 부서원�
 - 정보가 부족하면 합리적인 가정을 밝히고 진행한 뒤, 확인이 필요한 점을 마지막에 짧게 묻습니다.
 - 모르는 사실(시세, 법령 세부, 고객 정보, 출처 등)은 지어내지 말고 확인이 필요하다고 표시합니다.
 - 내 부서 일이 아니면 어느 부서로 보내야 하는지 알려 줍니다.
+- 이 사무실에서는 파일·노션·Figma·메일 같은 도구를 직접 쓸 수 없습니다. 지침에 도구로 하는 절차가 있으면 그 결과물의 초안을 만들고, 대표님이나 코토가 실제로 할 일(어디에 저장·등록할지)을 짧게 적어 줍니다.
 
 # 사내 메신저 보고 형식
 결과물 맨 끝에 사내 메신저에 올릴 줄을 아래 형식으로 붙입니다. 이 줄들은 메신저로 옮겨지고 결과물에서는 빠집니다.
@@ -146,6 +149,28 @@ export const AGENTS = [
     guide: securityGuide,
   },
   {
+    id: "reference",
+    name: "보라",
+    title: "레퍼런스모음집 담당",
+    emoji: "🔖",
+    color: "#c77dff",
+    room: "archive",
+    intro: "참고할 사이트·경쟁사·업계 동향을 모으고 분류해요.",
+    skills: ["레퍼런스 정리", "경쟁사 조사 정리", "업계 동향 묶음", "작업 전 레퍼런스 추천"],
+    guide: referenceGuide,
+  },
+  {
+    id: "template",
+    name: "틀이",
+    title: "템플릿기록실 담당",
+    emoji: "🧩",
+    color: "#06d6a0",
+    room: "archive",
+    intro: "홈페이션 판매용 템플릿의 제작 내용을 기록해요.",
+    skills: ["템플릿 구성 기록", "제작 노트 정리", "판매 상태 정리", "비슷한 블록 찾기"],
+    guide: templateGuide,
+  },
+  {
     id: "palja",
     name: "도담",
     title: "팔자서재 본부장",
@@ -219,21 +244,23 @@ export const CHIEF = AGENTS.find((agent) => agent.chief);
 
 const ROSTER = STAFF.map((a) => `- ${a.id}: ${a.title} ${a.name} — ${a.intro} (예: ${a.skills.join(", ")})`).join("\n");
 
-for (const agent of STAFF) agent.system = withGuide(agent.guide);
-
-CHIEF.system = `${withGuide(CHIEF.guide)}
-
-# 부서 명단
-${ROSTER}`;
-
-// 코토가 업무를 나눌 때 쓰는 지시문. 응답은 JSON 스키마로 강제된다.
-export const DELEGATE_SYSTEM = `${CHIEF.system}
-
-지금은 대표님의 마지막 메시지를 보고 업무를 배분하는 단계입니다.
+const DELEGATE_RULES = `지금은 대표님의 마지막 메시지를 보고 업무를 배분하는 단계입니다.
 - 실무 결과물이 필요한 일이면 꼭 필요한 부서만 1~4곳 골라 assignments에 넣습니다. 앞 부서의 결과를 다음 부서가 참고하므로 작업 순서대로 나열합니다.
 - 각 task는 그 부서가 바로 착수할 수 있게 배경, 해야 할 일, 결과물 형태를 구체적으로 적습니다.
 - 인사, 간단한 질문, 개인 일정처럼 부서가 필요 없는 일이면 assignments를 비우고 direct_reply에 직접 답합니다. 배분할 때는 direct_reply를 빈 문자열로 둡니다.
 - plan에는 배분 이유를 한두 문장으로 씁니다.`;
+
+// 코토가 업무를 나눌 때 쓰는 지시문. 응답은 JSON 스키마로 강제된다.
+export let DELEGATE_SYSTEM = "";
+
+// 부서 지침을 바꿔 끼운다 (테스트 페이지 빌드가 맥의 원본 지침으로 바꿀 때 쓴다)
+export function applyGuides(guideById = {}) {
+  for (const agent of AGENTS) if (guideById[agent.id]) agent.guide = guideById[agent.id];
+  for (const agent of STAFF) agent.system = withGuide(agent.guide);
+  CHIEF.system = `${withGuide(CHIEF.guide)}\n\n# 부서 명단\n${ROSTER}`;
+  DELEGATE_SYSTEM = `${CHIEF.system}\n\n${DELEGATE_RULES}`;
+}
+applyGuides();
 
 export const DELEGATE_SCHEMA = {
   type: "object",

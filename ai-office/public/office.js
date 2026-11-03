@@ -17,7 +17,7 @@ export const FLOORS = [
     rooms: [
       ["strategy", "전략기획실"], ["youtube", "유튜브편집국"], ["design", "디자인실"], ["marketing", "마케팅실"], ["insight", "인사이트 캡쳐"],
       ["comms", "커뮤니케이션실"], ["ceo", "대표실"], ["chief", "★ 비서실"], ["meeting", "회의실"], ["dictionary", "사전편찬실"],
-      ["security", "정보보안실"], ["archive", "코토자료실"], ["lounge", "휴게실"], ["elevator", "엘리베이터 ▲팔자서재"], ["finance", "재무관리부"],
+      ["security", "정보보안실"], ["archive", "자료실 · 레퍼런스/템플릿"], ["lounge", "휴게실"], ["elevator", "엘리베이터 ▲팔자서재"], ["finance", "재무관리부"],
     ],
   },
   {
@@ -74,6 +74,8 @@ const LOOKS = {
   finance: { skin: "#f5c9a0", hair: "#1e1e28", style: "long", shirt: "#2ec5d3", pants: "#3b4a5c", acc: ["glasses"], accent: "#fff" },
   security: { skin: "#d9a066", hair: "#1e1e28", style: "short", shirt: "#4a4e69", pants: "#22222e", acc: ["tie"], accent: "#d64545" },
   palja: { skin: "#f5c9a0", hair: "#3d2e5c", style: "long", shirt: "#9b87d6", pants: "#3d2e5c", acc: [], accent: "#ffd166" },
+  reference: { skin: "#f1c27d", hair: "#4a2c5c", style: "bun", shirt: "#c77dff", pants: "#3a2f4a", acc: ["glasses"], accent: "#fff" },
+  template: { skin: "#e8b48a", hair: "#2b2b2b", style: "spiky", shirt: "#06d6a0", pants: "#30485a", acc: [], accent: "#fff" },
   "palja-dev": { skin: "#d9a066", hair: "#1e1e28", style: "short", shirt: "#a78bfa", pants: "#2f2f3f", acc: ["headphones"], accent: "#fff" },
   "palja-shelf": { skin: "#f5c9a0", hair: "#5c3d22", style: "bun", shirt: "#f4a261", pants: "#4a3b2c", acc: ["glasses"], accent: "#fff" },
   "palja-channel": { skin: "#f1c27d", hair: "#e07a9f", style: "long", shirt: "#ffb3c7", pants: "#5c4a6b", acc: [], accent: "#fff" },
@@ -94,6 +96,8 @@ const DESK_PROPS = {
   dictionary: "notebook",
   finance: "papers",
   security: "dual",
+  reference: "tablet",
+  template: "notebook",
   palja: "calendar",
   "palja-dev": "dual",
   "palja-shelf": "notebook",
