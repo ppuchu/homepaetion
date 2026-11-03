@@ -2,8 +2,7 @@ import { createOffice } from "./office.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { createMessenger } from "./messenger.js";
 import { chat, delegate, ensureAccess, loadConfig } from "./api.js";
-
-const HISTORY_KEY = "aiOffice.history";
+import { openStore } from "./store.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -13,20 +12,18 @@ let messenger = null; // 사내 메신저
 let current = null; // 대화 중인 직원
 const busy = new Set(); // 지금 일하고 있는 직원 id
 
-// ---------- 저장소 (브라우저마다 따로 보관) ----------
-function load(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback;
-  } catch {
-    return fallback;
-  }
+// ---------- 저장소 (store.js가 정한 곳에 보관) ----------
+let store = null;
+const histories = {}; // 직원 id → 대화 기록
+const saveHistories = () => store?.saveHistories(histories);
+
+// 다른 기기에서 바뀐 기록을 반영한다. 지금 일하고 있는 직원의 기록은 이 화면 것을 그대로 둔다.
+function applyRemote(data) {
+  for (const id of Object.keys(histories)) if (!busy.has(id) && !(id in data.histories)) delete histories[id];
+  for (const [id, list] of Object.entries(data.histories)) if (!busy.has(id)) histories[id] = list;
+  messenger.replaceAll(data.messages);
+  if (current && !busy.has(current.id)) renderMessages();
 }
-function save(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
-const histories = load(HISTORY_KEY, {});
 
 // ---------- API ----------
 const toApi = (history) => history.map(({ role, content }) => ({ role, content }));
@@ -219,7 +216,7 @@ function work(agent, text, { label, onPartial } = {}) {
     history.push({ role: "user", content: text });
     // 너무 길어지면 오래된 대화부터 잘라낸다 (user로 시작하도록 2개씩)
     while (history.length > 30) history.splice(0, 2);
-    save(HISTORY_KEY, histories);
+    saveHistories();
     busy.add(agent.id);
     setDeskState(agent.id, "working", label);
     updateComposer();
@@ -242,12 +239,12 @@ function work(agent, text, { label, onPartial } = {}) {
         onPartial?.(partial);
       });
       history.push({ role: "assistant", content: reply });
-      save(HISTORY_KEY, histories);
+      saveHistories();
       setDeskState(agent.id, "done");
       return parseReply(reply);
     } catch (err) {
       history.pop();
-      save(HISTORY_KEY, histories);
+      saveHistories();
       setDeskState(agent.id, "idle");
       if (current === agent) renderMessages();
       throw err;
@@ -340,7 +337,7 @@ async function delegateTask(text, { fromDrawer } = {}) {
   const history = (histories[chief.id] ||= []);
   history.push({ role: "user", content: text });
   while (history.length > 30) history.splice(0, 2);
-  save(HISTORY_KEY, histories);
+  saveHistories();
 
   if (current === chief) renderMessages();
   busy.add(chief.id);
@@ -364,7 +361,7 @@ async function delegateTask(text, { fromDrawer } = {}) {
       show("assistant", reply);
       messenger.post({ from: chief.id, text: reply });
       history.push({ role: "assistant", content: reply });
-      save(HISTORY_KEY, histories);
+      saveHistories();
       setDeskState(chief.id, "done");
       return;
     }
@@ -442,7 +439,7 @@ async function delegateTask(text, { fromDrawer } = {}) {
 
     const parsed = parseReply(report);
     history.push({ role: "assistant", content: report, parts });
-    save(HISTORY_KEY, histories);
+    saveHistories();
     messenger.post({ from: chief.id, kind: "report", text: `대표님, 보고드립니다. ${parsed.report || clip(parsed.text.replace(/\s+/g, " "), 200)}`, link: chief.id });
     for (const q of parsed.questions) messenger.post({ from: chief.id, kind: "question", text: q, agentId: chief.id });
     setDeskState(chief.id, "done", "보고 완료");
@@ -454,7 +451,7 @@ async function delegateTask(text, { fromDrawer } = {}) {
       history.pop();
       if (current === chief) $("#input").value ||= text;
     }
-    save(HISTORY_KEY, histories);
+    saveHistories();
     setDeskState(chief.id, "idle");
     postError(chief, err);
     if (current === chief) {
@@ -619,6 +616,9 @@ async function init() {
     const status = $("#status");
     status.textContent = config.status;
     status.className = `status ${config.ready ? "ok" : "bad"}`;
+    store = await openStore();
+    Object.assign(histories, store.histories);
+    status.textContent += ` · ${store.label}`;
   } catch {
     $("#status").textContent = "서버 연결 실패";
     $("#status").className = "status bad";
@@ -641,7 +641,10 @@ async function init() {
     onSend: sendFromMessenger,
     onAnswer: answerQuestion,
     onWriteLog: writeDailyLog,
+    initial: store.messages,
+    persist: (messages) => store.saveMessages(messages),
   });
+  store.onChange(applyRemote, (text) => messenger.post({ from: chiefAgent().id, text: `⚠️ ${text}`, quiet: true }));
   renderFloorTabs();
   updateFloorTabs("hq");
   renderRoster();
@@ -668,7 +671,7 @@ async function init() {
     clearArmed = 0;
     btn.textContent = "🧹 새 업무";
     delete histories[current.id];
-    save(HISTORY_KEY, histories);
+    saveHistories();
     setDeskState(current.id, "idle");
     renderMessages();
   });

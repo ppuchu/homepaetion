@@ -3,7 +3,6 @@
 // 기록은 이 브라우저에만 저장된다.
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 
-const STORE_KEY = "aiOffice.messenger";
 const MAX_MESSAGES = 400;
 
 export const CHANNELS = [
@@ -22,9 +21,9 @@ const KIND_TAG = {
   log: "📒 업무일지",
 };
 
-export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onAnswer, onWriteLog }) {
+export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onAnswer, onWriteLog, initial = [], persist }) {
   const byId = Object.fromEntries(agents.map((a) => [a.id, a]));
-  let messages = load();
+  let messages = initial.slice(-MAX_MESSAGES);
   let active = "work";
   let replyTo = null; // 답장 중인 질문 { agentId, question }
   const unread = Object.fromEntries(CHANNELS.map((c) => [c.id, 0]));
@@ -76,17 +75,9 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
     }
   }).observe(root);
 
-  function load() {
-    try {
-      return JSON.parse(localStorage.getItem(STORE_KEY)) || [];
-    } catch {
-      return [];
-    }
-  }
   function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES)));
-    } catch {}
+    clearTimeout(saveTimer);
+    persist?.(messages.slice(-MAX_MESSAGES));
   }
 
   function sender(from) {
@@ -286,6 +277,14 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
   return {
     post,
     update,
+    // 다른 기기에서 바뀐 기록으로 통째로 바꾼다 (저장은 하지 않는다)
+    replaceAll(next) {
+      const before = new Set(messages.map((m) => m.id));
+      messages = next.slice(-MAX_MESSAGES);
+      for (const m of messages) if (!before.has(m.id) && !(visible && m.ch === active)) unread[m.ch] = (unread[m.ch] || 0) + 1;
+      renderChannels();
+      renderList();
+    },
     setChannel,
     focus() {
       root.scrollIntoView({ behavior: "smooth", block: "center" });

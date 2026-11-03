@@ -1,6 +1,6 @@
 // claude.ai 테스트 페이지를 dist-demo/ 에 만든다.
 //   node scripts/build-demo.mjs
-// 화면(public/)은 그대로 쓰고, api.js만 demo/api.js(claude.ai의 Claude 사용)로 바꾼다.
+// 화면(public/)은 그대로 쓰고, api.js와 store.js만 demo/ 버전(claude.ai의 Claude·저장소 사용)으로 바꾼다.
 // 직원 명부와 부서 지침(src/)은 agents-data.js 하나로 묶는다.
 import { build } from "esbuild";
 import fs from "node:fs/promises";
@@ -31,6 +31,9 @@ for (const file of ["app.js", "office.js", "messenger.js", "markdown.js", "style
   await fs.copyFile(path.join(root, "public", file), path.join(out, file));
 }
 await fs.copyFile(path.join(root, "demo/api.js"), path.join(out, "api.js"));
+// 저장소: 기본(브라우저) 버전은 store-local.js로 두고, 테스트용(claude.ai 저장소)을 store.js로 쓴다
+await fs.copyFile(path.join(root, "public/store.js"), path.join(out, "store-local.js"));
+await fs.copyFile(path.join(root, "demo/store.js"), path.join(out, "store.js"));
 for (const file of ["Galmuri11.woff2", "Galmuri11-Bold.woff2", "Galmuri-OFL.md"]) {
   await fs.copyFile(path.join(root, "public/fonts", file), path.join(out, "fonts", file));
 }
