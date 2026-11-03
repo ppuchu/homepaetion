@@ -27,6 +27,24 @@
 
   <main class="layout">
     <section class="floor" aria-label="사무실">
+      <div class="live-hero" id="liveHero">
+        <div class="live-hero-text">
+          <p class="eyebrow" id="liveEyebrow">LIVE OFFICE · REAL-TIME</p>
+          <h2>오늘의 사무실</h2>
+          <p class="live-desc">직원을 클릭하거나 메신저로 업무를 맡기면 자리에서 바로 일을 시작해요.</p>
+        </div>
+        <div class="live-clock" aria-live="off">
+          <span>SEOUL</span>
+          <b id="liveClock">--:--</b>
+          <small id="liveClockSub">대기 중</small>
+        </div>
+      </div>
+      <div class="live-bar" id="liveBar">
+        <span class="pill pill-work">근무 <b id="cntWork">0</b></span>
+        <span class="pill pill-done">완료 <b id="cntDone">0</b></span>
+        <span class="pill pill-idle">대기 <b id="cntIdle">0</b></span>
+        <span class="live-bar-hint">상태는 직원이 일을 시작·완료할 때 바뀌어요</span>
+      </div>
       <div class="floor-tabs" id="floorTabs" role="tablist" aria-label="층 선택"></div>
       <div class="office-scroll" id="officeScroll">
         <div class="office-stage">
@@ -36,6 +54,32 @@
       </div>
       <div class="roster" id="roster" aria-label="직원 목록"></div>
     </section>
+
+
+    <aside class="side-col" aria-label="대표 패널">
+      <section class="win" id="consoleWin" aria-label="대표 지시창">
+        <div class="win-bar"><span>🎤 ceo.console — 대표 지시창</span><span class="win-ctl">— □ ✕</span></div>
+        <div class="win-body">
+          <p class="console-status" id="consoleStatus">코토에게 업무를 맡겨요. 필요한 부서에 알아서 나눠 줘요.</p>
+          <div class="console-chips" id="consoleChips"></div>
+          <form class="console-form" id="consoleForm">
+            <textarea id="consoleInput" rows="3" placeholder="예: 이번 주 홈페이션 문의 현황 정리해줘 (Enter 전송, Shift+Enter 줄바꿈)"></textarea>
+            <button class="btn primary" type="submit" id="consoleSend">지시</button>
+          </form>
+        </div>
+      </section>
+      <section class="win" id="approvalWin" aria-label="결재함">
+        <div class="win-bar"><span>✅ ceo.approval — 결재함 <b class="approval-count" id="approvalCount" hidden>0</b></span><span class="win-ctl">— □ ✕</span></div>
+        <div class="win-body">
+          <div class="approval-empty" id="approvalEmpty">결재 대기 없음<br /><small>직원이 확인을 요청하면 여기에 올라와요.</small></div>
+          <ul class="approval-list" id="approvalList"></ul>
+        </div>
+      </section>
+      <section class="win feed-win" aria-label="실시간 활동">
+        <div class="win-bar"><span>📡 live.feed</span><span class="win-ctl">— □ ✕</span></div>
+        <ol class="feed-list" id="feedList"><li class="feed-empty">아직 활동이 없어요. 업무를 맡기면 여기에 흐름이 쌓여요.</li></ol>
+      </section>
+    </aside>
 
     <section class="messenger" id="messenger" aria-label="사내 메신저"></section>
   </main>

@@ -19,9 +19,10 @@ const KIND_TAG = {
   question: "❓ 질문",
   answer: "↩ 답변",
   log: "📒 업무일지",
+  approval: "📝 노션 저장 승인 요청",
 };
 
-export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onAnswer, onWriteLog, initial = [], persist }) {
+export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onAnswer, onWriteLog, onDecide, initial = [], persist }) {
   const byId = Object.fromEntries(agents.map((a) => [a.id, a]));
   let messages = initial.slice(-MAX_MESSAGES);
   let active = "work";
@@ -151,6 +152,49 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
       btn.addEventListener("click", () => onOpenAgent(m.link));
       actions.append(btn);
     }
+    // 노션 저장 승인 요청: 바꿀 내용을 펼쳐 보고, 승인해야 저장된다
+    if (m.kind === "approval" && m.proposal) {
+      const p = m.proposal;
+      const box = document.createElement("details");
+      box.className = "ms-proposal";
+      const lines = [p.kind === "create" ? `새 페이지: ${p.title || "(제목 없음)"}` : `대상 페이지: ${p.page || ""}`];
+      if (p.parent) lines.push(`넣을 곳: ${p.parent}`);
+      if (p.properties) lines.push(`속성: ${JSON.stringify(p.properties)}`);
+      for (const r of p.replacements || []) lines.push(`바꾸기: 「${r.old_str}」 → 「${r.new_str}」`);
+      if (p.content) lines.push("", p.content);
+      box.innerHTML = `<summary>저장할 내용 보기</summary><pre></pre>`;
+      box.querySelector("pre").textContent = lines.join("\n");
+      actions.before(box);
+      const STATUS = { saving: "⏳ 노션에 저장하는 중…", saved: "✅ 노션에 저장됨", rejected: "✕ 저장 안 함", failed: "⚠️ 저장 실패" };
+      if (!m.status || m.status === "pending" || m.status === "failed") {
+        const ok = document.createElement("button");
+        ok.type = "button";
+        ok.className = "chip approve";
+        ok.textContent = m.status === "failed" ? "↻ 다시 저장" : "✅ 승인하고 저장";
+        ok.addEventListener("click", () => onDecide?.(m, true));
+        const no = document.createElement("button");
+        no.type = "button";
+        no.className = "chip";
+        no.textContent = "저장 안 함";
+        no.addEventListener("click", () => onDecide?.(m, false));
+        actions.append(ok, no);
+      }
+      if (m.status && m.status !== "pending") {
+        const tag = document.createElement("span");
+        tag.className = "ms-status";
+        tag.textContent = STATUS[m.status] || m.status;
+        actions.prepend(tag);
+      }
+      if (m.url) {
+        const a = document.createElement("a");
+        a.href = m.url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.className = "chip";
+        a.textContent = "노션에서 열기";
+        actions.append(a);
+      }
+    }
     if (m.kind === "log") {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -200,8 +244,8 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
   }
 
   // 메시지 올리기. 돌려받은 id로 나중에 내용을 고칠 수 있다(작성 중 → 완성).
-  function post({ ch = "work", from, text, kind = "talk", link, agentId, quiet }) {
-    const m = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ch, from, text, kind, link, agentId, time: Date.now() };
+  function post({ ch = "work", from, text, kind = "talk", link, agentId, quiet, proposal }) {
+    const m = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ch, from, text, kind, link, agentId, time: Date.now(), ...(proposal ? { proposal, status: "pending" } : {}) };
     messages.push(m);
     if (messages.length > MAX_MESSAGES) messages = messages.slice(-MAX_MESSAGES);
     save();
@@ -216,6 +260,7 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
     if (!(visible && ch === active)) unread[ch]++;
     renderChannels();
     if (!visible && !quiet && from !== "ceo") showToast(m);
+    document.dispatchEvent(new CustomEvent("messenger:change"));
     return m.id;
   }
 
@@ -231,6 +276,7 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
       el.replaceWith(messageEl(m));
       list.scrollTop = list.scrollHeight;
     }
+    document.dispatchEvent(new CustomEvent("messenger:change"));
   }
 
   function startReply(m) {
@@ -284,6 +330,11 @@ export function createMessenger({ root, agents, avatar, onOpenAgent, onSend, onA
       for (const m of messages) if (!before.has(m.id) && !(visible && m.ch === active)) unread[m.ch] = (unread[m.ch] || 0) + 1;
       renderChannels();
       renderList();
+      document.dispatchEvent(new CustomEvent("messenger:change"));
+    },
+    // 대표님 답을 기다리는 질문 (결재함)
+    pending() {
+      return messages.filter((x) => x.kind === "question" && x.agentId && !x.answered).reverse();
     },
     setChannel,
     focus() {

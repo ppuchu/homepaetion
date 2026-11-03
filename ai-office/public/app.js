@@ -1,7 +1,7 @@
 import { createOffice } from "./office.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { createMessenger } from "./messenger.js";
-import { chat, delegate, ensureAccess, loadConfig } from "./api.js";
+import { applyNotionProposal, chat, delegate, ensureAccess, loadConfig } from "./api.js";
 import { openStore } from "./store.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -88,7 +88,41 @@ function renderRoster() {
   }
 }
 
+// ---------- 상단 시계·상태 알약·실시간 활동 ----------
+const clock = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+function tickClock() {
+  const el = $("#liveClock");
+  if (el) el.textContent = clock.format(new Date());
+}
+function updateLive() {
+  const work = document.querySelectorAll(".staff.working").length;
+  const done = document.querySelectorAll(".staff.done").length;
+  const total = document.querySelectorAll(".staff").length;
+  const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
+  set("#cntWork", work);
+  set("#cntDone", done);
+  set("#cntIdle", Math.max(0, total - work - done));
+  const sub = $("#liveClockSub");
+  if (sub) sub.textContent = work ? `${work}명 근무 중` : "대기 중";
+}
+function feed(text) {
+  const list = $("#feedList");
+  if (!list) return;
+  list.querySelector(".feed-empty")?.remove();
+  const li = document.createElement("li");
+  const time = document.createElement("time");
+  time.textContent = clock.format(new Date());
+  li.append(time, document.createTextNode(text));
+  list.prepend(li);
+  while (list.children.length > 30) list.lastChild.remove();
+}
+
 function setDeskState(agentId, state, label) {
+  queueMicrotask(updateLive);
+  setTimeout(updateConsole, 0);
+  const who = agents.find((a) => a.id === agentId);
+  if (who && state === "working" && !working.has(agentId)) feed(`${who.name} 업무 시작`);
+  if (who && state === "done") feed(`✔ ${who.name} 업무 완료`);
   office?.setWorking(agentId, state === "working");
   if (state === "working") working.add(agentId);
   else working.delete(agentId);
@@ -323,6 +357,98 @@ async function answerQuestion(agentId, question, answer) {
   } catch (err) {
     postError(agent, err);
   }
+}
+
+// ---------- 대표 지시창 · 결재함 (우측 패널) ----------
+const CONSOLE_CHIPS = [
+  { label: "📊 현황 보고", run: () => sendFromMessenger(chiefAgent().id, "지금 진행 중인 업무와 부서별 상황을 짧게 보고해 줘.", "work") },
+  { label: "👥 회의 소집", run: () => openMeeting() },
+  { label: "📒 업무일지", run: () => { messenger.setChannel("log"); writeDailyLog(); } },
+];
+const approvalDrafts = {}; // 질문 id → 쓰다 만 답장 (목록이 다시 그려져도 남긴다)
+
+function updateConsole() {
+  const el = $("#consoleStatus");
+  const chief = chiefAgent();
+  if (!el || !chief) return;
+  el.textContent = busy.has(chief.id) ? `${chief.name}가 업무를 배분하고 있어요…` : "코토에게 업무를 맡겨요. 필요한 부서에 알아서 나눠 줘요.";
+}
+
+function renderApproval() {
+  const list = $("#approvalList");
+  if (!list || !messenger) return;
+  for (const input of list.querySelectorAll("input[data-id]")) approvalDrafts[input.dataset.id] = input.value;
+  const items = messenger.pending();
+  const count = $("#approvalCount");
+  count.hidden = !items.length;
+  count.textContent = items.length;
+  $("#approvalEmpty").hidden = items.length > 0;
+  list.replaceChildren();
+  for (const q of items) {
+    const agent = agentById(q.agentId);
+    if (!agent) continue;
+    const li = document.createElement("li");
+    const head = document.createElement("div");
+    head.className = "approval-head";
+    const name = document.createElement("b");
+    name.textContent = `${agent.emoji} ${agent.name}`;
+    const role = document.createElement("small");
+    role.textContent = agent.title;
+    head.append(name, role);
+    const text = document.createElement("p");
+    text.textContent = q.text;
+    const form = document.createElement("form");
+    form.className = "approval-form";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.dataset.id = q.id;
+    input.placeholder = "답장 입력";
+    input.value = approvalDrafts[q.id] || "";
+    const btn = document.createElement("button");
+    btn.type = "submit";
+    btn.className = "btn small primary";
+    btn.textContent = "답장";
+    form.append(input, btn);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const answer = input.value.trim();
+      if (!answer) return;
+      delete approvalDrafts[q.id];
+      messenger.update(q.id, { answered: true });
+      answerQuestion(q.agentId, q.text, answer);
+    });
+    li.append(head, text, form);
+    list.append(li);
+  }
+}
+
+function initSidePanel() {
+  for (const chip of CONSOLE_CHIPS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = chip.label;
+    btn.addEventListener("click", chip.run);
+    $("#consoleChips").append(btn);
+  }
+  $("#consoleForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("#consoleInput").value.trim();
+    if (!text) return;
+    $("#consoleInput").value = "";
+    sendFromMessenger(chiefAgent().id, text, "work");
+  });
+  $("#consoleInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      $("#consoleForm").requestSubmit();
+    }
+  });
+  document.addEventListener("messenger:change", () => {
+    renderApproval();
+    updateConsole();
+  });
+  renderApproval();
 }
 
 // ---------- 비서실장 코토의 업무 배분 ----------
@@ -608,6 +734,32 @@ async function runMeeting(topic) {
   $("#meetingStart").disabled = false;
 }
 
+// ---------- 노션 저장 승인 ----------
+// 직원이 노션에 쓰려고 하면 api.js가 이 이벤트를 보내고, 대표님이 승인해야 실제로 저장된다
+document.addEventListener("office:proposal", (e) => {
+  const { agentId, proposal } = e.detail;
+  const agent = agentById(agentId);
+  messenger.post({ from: agentId, kind: "approval", proposal, agentId, text: `노션에 저장할게요: **${proposal.summary || proposal.title || "변경 사항"}**\n승인해 주시면 바로 저장합니다.` });
+  messenger.post({ from: chiefAgent().id, text: `대표님, ${agent?.name || "직원"}님이 노션 저장 승인을 요청했어요. 내용을 펼쳐 보시고 승인해 주세요.`, quiet: true });
+});
+
+async function decideProposal(m, approve) {
+  if (!approve) {
+    messenger.update(m.id, { status: "rejected" });
+    return;
+  }
+  if (!ensurePassword()) return;
+  messenger.update(m.id, { status: "saving" });
+  try {
+    const { url } = await applyNotionProposal(m.proposal);
+    messenger.update(m.id, { status: "saved", url });
+    messenger.post({ from: m.agentId, kind: "report", text: `노션에 저장했어요: ${m.proposal.summary || m.proposal.title || ""}` });
+  } catch (err) {
+    messenger.update(m.id, { status: "failed" });
+    messenger.post({ from: m.agentId, text: `⚠️ 노션에 저장하지 못했어요: ${err.message}` });
+  }
+}
+
 // ---------- 시작 ----------
 async function init() {
   try {
@@ -641,6 +793,7 @@ async function init() {
     onSend: sendFromMessenger,
     onAnswer: answerQuestion,
     onWriteLog: writeDailyLog,
+    onDecide: decideProposal,
     initial: store.messages,
     persist: (messages) => store.saveMessages(messages),
   });
@@ -648,6 +801,10 @@ async function init() {
   renderFloorTabs();
   updateFloorTabs("hq");
   renderRoster();
+  updateLive();
+  initSidePanel();
+  tickClock();
+  setInterval(tickClock, 20000);
 
   document.addEventListener("messenger:unread", (e) => {
     const badge = $("#msgBadge");

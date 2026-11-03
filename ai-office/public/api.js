@@ -78,3 +78,8 @@ export async function chat(agentId, messages, onText) {
 export async function delegate(messages) {
   return (await post("/api/delegate", { messages })).json();
 }
+
+// 노션 저장은 claude.ai 테스트 페이지(demo/api.js)에서만 된다
+export async function applyNotionProposal() {
+  throw new Error("노션 저장은 claude.ai 테스트 페이지에서만 할 수 있어요.");
+}
