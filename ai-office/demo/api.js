@@ -3,7 +3,73 @@
 import { AGENTS, DELEGATE_SYSTEM, STAFF_IDS } from "./agents-data.js";
 
 const byId = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
-const samplePromise = window.claude?.use ? window.claude.use("sample").catch(() => null) : Promise.resolve(null);
+const use = (name) => (window.claude?.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null));
+const samplePromise = use("sample");
+const mcpPromise = use("mcp");
+
+// ---------- 노션 읽기 (대표님 claude.ai의 노션 연결을 그대로 씀, 쓰기는 하지 않음) ----------
+const NOTION = "Notion";
+const NOTION_ERRORS = {
+  needs_reauth: "노션 연결이 만료됐어요. claude.ai 설정 → 커넥터에서 노션을 다시 연결해 주세요.",
+  server_not_connected: "claude.ai에 노션이 연결돼 있지 않아요. 설정 → 커넥터에서 노션을 추가해 주세요.",
+  not_in_manifest: "이 페이지에서 노션 사용이 허용되지 않았어요.",
+  approval_required: "노션 사용 허용이 필요해요.",
+  server_unavailable: "노션이 잠시 응답하지 않아요.",
+  tool_error: "노션이 요청을 처리하지 못했어요.",
+};
+const clipText = (value, max) => {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > max ? `${text.slice(0, max)}\n…(이하 생략)` : text;
+};
+
+// 직원이 노션을 보는 동안 직원 목록·활동 피드에 표시한다
+function showActivity(agent, text) {
+  const state = document.querySelector(`.staff[data-id="${agent.id}"] .state`);
+  if (state) state.textContent = text;
+  const list = document.querySelector("#feedList");
+  if (list) {
+    list.querySelector(".feed-empty")?.remove();
+    const li = document.createElement("li");
+    const time = document.createElement("time");
+    time.textContent = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+    li.append(time, document.createTextNode(`${agent.emoji} ${agent.name} · ${text}`));
+    list.prepend(li);
+  }
+}
+
+async function notionTools(agent) {
+  const [mcp, sample] = await Promise.all([mcpPromise, samplePromise]);
+  if (!mcp || !sample) return null;
+  const limits = await sample.limits().catch(() => null);
+  if (!limits?.tools) return null;
+  const call = async (tool, input, label, max, signal) => {
+    showActivity(agent, label);
+    try {
+      const result = await mcp.callTool(NOTION, tool, input, { signal });
+      return clipText(result.payload ?? result.content, max);
+    } catch (e) {
+      throw new Error(NOTION_ERRORS[e?.code] || "노션을 읽지 못했어요.");
+    }
+  };
+  return [
+    {
+      name: "notion_search",
+      description: "대표님 노션에서 페이지·데이터베이스를 키워드로 찾는다. 제목·주소·짧은 내용 일부를 돌려준다. 업무에 노션 자료(캘린더, 장부, 보관함, 채팅 기록 등)가 필요할 때 먼저 쓴다.",
+      inputSchema: { type: "object", properties: { query: { type: "string", description: "짧고 구체적인 검색어" } }, required: ["query"] },
+      execute: (input, { signal }) => call("notion-search", { query: String(input.query || ""), page_size: 6, max_highlight_length: 160 }, `노션 검색: ${String(input.query || "").slice(0, 20)}`, 8000, signal),
+    },
+    {
+      name: "notion_fetch",
+      description: "노션 페이지나 데이터베이스 하나를 주소(URL) 또는 id로 열어 내용을 읽는다. notion_search로 찾은 주소를 넣는다. 읽기만 하고 고치지 않는다.",
+      inputSchema: { type: "object", properties: { id: { type: "string", description: "노션 페이지 URL 또는 id" } }, required: ["id"] },
+      execute: (input, { signal }) => call("notion-fetch", { id: String(input.id || "") }, "노션 페이지 읽는 중", 24000, signal),
+    },
+  ];
+}
+
+const NOTION_NOTE = `\n\n# 노션 읽기
+이 사무실에서는 노션을 읽을 수 있습니다(notion_search로 찾고 notion_fetch로 읽기). 업무에 대표님 노션 자료가 필요하면 찾아 읽고, 읽은 페이지 제목을 결과물에 밝혀 주세요. 필요 없으면 쓰지 않습니다.
+노션에 쓰기·수정은 할 수 없습니다. 노션에 남겨야 할 내용은 초안으로 만들고 어디에 넣을지 적어 주세요.`;
 
 const ERRORS = {
   not_granted: "Claude 사용을 허용해야 직원이 일할 수 있어요. 페이지를 새로 열고 허용을 눌러 주세요.",
@@ -40,10 +106,13 @@ export const ensureAccess = () => true;
 export async function chat(agentId, messages, onText) {
   const sample = await getSample();
   const agent = byId[agentId];
+  const tools = await notionTools(agent);
   try {
-    const { text } = await sample([{ role: "user", content: `${agent.system}\n\n---\n위 지침대로 일해 주세요. 아래부터 대표님과의 대화입니다.` }, ...messages], {
+    const intro = `${agent.system}${tools ? NOTION_NOTE : ""}\n\n---\n위 지침대로 일해 주세요. 아래부터 대표님과의 대화입니다.`;
+    const { text } = await sample([{ role: "user", content: intro }, ...messages], {
       ...(agent.chief ? CHIEF : STAFF),
       cache: false,
+      ...(tools ? { tools } : {}),
       onText: ({ text }) => onText(text),
     });
     return text;
